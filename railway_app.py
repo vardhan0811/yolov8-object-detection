@@ -366,8 +366,10 @@ def internal_server_error(e):
 
 # Main routes
 @app.route('/')
+@app.route('/home')
+@app.route('/index')
 def index():
-    """Render home page"""
+    """Render home page - with multiple route options to ensure it's accessible"""
     try:
         # Get list of available models
         model_files = []
@@ -384,13 +386,37 @@ def index():
                 if file.endswith('.pt'):
                     model_files.append(file)
         
-        # Don't try to render a template that might reference webcam, just send directly to upload page
-        return redirect(url_for('upload_file'))
+        logger.info("Rendering home.html template")
+        # Use our new home page template that doesn't reference webcam
+        return render_template('home.html', 
+                             models=model_files, 
+                             model_loaded=model_loaded,
+                             model_error=model_loading_error)
     except Exception as e:
         logger.error(f"Error in index route: {str(e)}")
         logger.error(traceback.format_exc())
-        # Send directly to upload page as fallback
-        return redirect(url_for('upload_file'))
+        
+        # If there's an error rendering the home page, create a very basic page
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>YOLO Object Detection</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container mt-5">
+                <h1>YOLO Object Detection</h1>
+                <p>Welcome to the YOLO Object Detection app!</p>
+                <p>There was an error rendering the full home page: {str(e)}</p>
+                <div class="my-4">
+                    <a href="/upload" class="btn btn-primary">Go to Upload Page</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():

@@ -69,6 +69,10 @@ python -c "import flask; print(f'Flask version: {flask.__version__}')" || echo "
 echo "- Checking Ultralytics installation..."
 python -c "import ultralytics; print(f'Ultralytics version: {ultralytics.__version__}')" || echo "❌ Ultralytics import failed"
 
+# Set environment variables to help with loading
+export FLASK_APP=railway_app.py
+export TORCH_ALLOW_WEIGHTS_ONLY_LOAD_DETECTION=1
+
 echo "=========================================================="
 echo "Starting gunicorn with railway_app.py on port $PORT..."
 echo "Command: gunicorn railway_app:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=1 --threads=4"
