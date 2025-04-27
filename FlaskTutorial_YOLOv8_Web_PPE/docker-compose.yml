@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./static/files:/app/static/files
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped 

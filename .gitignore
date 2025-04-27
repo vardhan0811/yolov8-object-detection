@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE specific files
+.idea/
+.vscode/
+
+# Large media files
+*.mp4
+*.avi
+Videos/
+Images/
+output.avi
+*.partial
+
+# Temporary files
+temp/
+tmp/
+
+# Logs
+logs/
+*.log 

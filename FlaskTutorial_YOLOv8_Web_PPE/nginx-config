@@ -1,0 +1,18 @@
+server {
+    listen 80;
+    server_name your_domain.com www.your_domain.com;
+    
+    location / {
+        include proxy_params;
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_read_timeout 86400;
+    }
+
+    location /static {
+        alias /home/your_username/FlaskTutorial_YOLOv8_Web_PPE/static;
+    }
+} 

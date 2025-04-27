@@ -1,0 +1,1 @@
+web: cd FlaskTutorial_YOLOv8_Web_PPE && gunicorn flaskapp:app --bind 0.0.0.0:$PORT 

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>YOLOv8 Video Processing</title>
+    <!-- Adding Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Adding Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Adding AOS library for scroll animations -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --accent-color-hover: #2980b9;
+            --secondary-color: #16a085;
+            --text-light: #ecf0f1;
+            --text-dark: #2c3e50;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        body {
+            color: var(--text-light);
+            background: linear-gradient(135deg, #1a2a3a 0%, #0f2027 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, rgba(29, 43, 100, 0.8) 0%, rgba(0, 0, 0, 0) 70%);
+            z-index: -1;
+        }
+        
+        .navbar {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: var(--glass-border);
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+        }
+        
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .subtitle {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(5px);
+            border-bottom: var(--glass-border);
+            margin-bottom: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            z-index: 1;
+            box-shadow: var(--shadow);
+        }
+        
+        .subtitle h2 {
+            font-size: 1.5rem;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .subtitle h2::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, #3498db, transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        .video-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+            perspective: 1000px;
+        }
+        
+        .video-wrapper {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: var(--glass-border);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            width: 90%;
+            max-width: 1100px;
+            transition: transform 0.5s ease;
+            transform-style: preserve-3d;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .video-frame {
+            width: 100%;
+            height: 600px;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .video-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(0px) rotateX(0deg);
+            }
+            50% {
+                transform: translateY(-10px) rotateX(2deg);
+            }
+            100% {
+                transform: translateY(0px) rotateX(0deg);
+            }
+        }
+        
+        .upload-container {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: var(--glass-border);
+            width: 90%;
+            max-width: 1100px;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+        
+        .upload-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .form-group {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .file-upload {
+            position: relative;
+            display: inline-block;
+            overflow: hidden;
+            border-radius: 5px;
+            background: rgba(52, 152, 219, 0.2);
+            border: 1px solid rgba(52, 152, 219, 0.5);
+            padding: 8px 15px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload:hover {
+            background: rgba(52, 152, 219, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .file-upload input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            border: none;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            transform-style: preserve-3d;
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 7px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .submit-btn:active {
+            transform: translateY(0) scale(0.98);
+            box-shadow: 0 2px 3px rgba(0, 0, 0, 0.15);
+        }
+        
+        .file-name {
+            margin-left: 10px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-top: var(--glass-border);
+            margin-top: 2rem;
+        }
+        
+        .icon-spin {
+            animation: spin 2s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <nav class="navbar">
+            <div class="logo">
+                <i class="fas fa-eye"></i> YOLOv8 Vision
+            </div>
+            <div>
+                <i class="fas fa-cog fa-spin" style="color: var(--accent-color);"></i>
+            </div>
+        </nav>
+    </div>
+    
+    <div class="subtitle" data-aos="fade-down">
+        <h2><i class="fas fa-video"></i> Output Video</h2>
+    </div>
+
+    <div class="video-container">
+        <div class="video-wrapper" data-aos="zoom-in" data-aos-delay="300">
+            <div class="video-frame">
+                <img src="{{ url_for('video') }}" alt="Object Detection Video">
+            </div>
+        </div>
+    </div>
+    
+    <div class="upload-container" data-aos="fade-up" data-aos-delay="500">
+        <form method="POST" enctype="multipart/form-data" class="form-group">
+            {{form.hidden_tag()}}
+            <div class="file-upload">
+                <i class="fas fa-cloud-upload-alt"></i> Choose File
+                {{form.file(class_="custom-file-input", accept=".mp4, .avi, .mov, .mkv, .jpg, .jpeg, .png, .bmp, .webp")}}
+            </div>
+            <span class="file-name" id="file-name">No file selected</span>
+            <button type="submit" name="favorite" value="x" class="submit-btn">
+                <i class="fas fa-play"></i> Process File
+            </button>
+        </form>
+        <div class="supported-formats" style="text-align: center; margin-top: 15px; font-size: 0.9rem; color: var(--text-light); opacity: 0.8;">
+            <p>Supported formats: MP4, AVI, MOV, MKV, JPG, PNG, JPEG, BMP, WEBP</p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Powered by YOLOv8 | Real-time Object Detection</p>
+    </div>
+    
+    <!-- Adding AOS JavaScript -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        AOS.init({
+            duration: 1000,
+            once: false
+        });
+        
+        // Display file name when selected
+        document.querySelector('.custom-file-input').addEventListener('change', function(e) {
+            var fileName = e.target.files[0] ? e.target.files[0].name : 'No file selected';
+            document.getElementById('file-name').textContent = fileName;
+        });
+    </script>
+</body>
+</html>

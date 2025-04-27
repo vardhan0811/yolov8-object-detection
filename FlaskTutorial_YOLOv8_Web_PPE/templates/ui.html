@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>YOLOv8 Object Detection</title>
+    <!-- Adding Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Adding Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Adding AOS library for scroll animations -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --accent-color-hover: #2980b9;
+            --text-light: #ecf0f1;
+            --text-dark: #2c3e50;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+        
+        body {
+            color: var(--text-light);
+            background: linear-gradient(135deg, #1a2a3a 0%, #0f2027 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(ellipse at center, rgba(29, 43, 100, 0.8) 0%, rgba(0, 0, 0, 0) 70%);
+            z-index: -1;
+        }
+        
+        .navbar {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: var(--glass-border);
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+        }
+        
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tagline {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .tagline span {
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .video-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+            perspective: 1000px;
+        }
+        
+        .video-wrapper {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: var(--glass-border);
+            padding: 1rem;
+            box-shadow: var(--shadow);
+            width: 90%;
+            max-width: 1000px;
+            transition: transform 0.5s ease;
+            transform-style: preserve-3d;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .video-wrapper:hover {
+            transform: translateY(-10px) rotateX(5deg);
+        }
+        
+        .video-frame {
+            width: 100%;
+            height: 600px;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .video-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        
+        .status-bar {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            border-radius: 15px;
+            margin-top: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: var(--glass-border);
+            gap: 2rem;
+        }
+        
+        .stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        /* Form styles */
+        .camera-form-container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin: 1rem auto;
+            width: 90%;
+            max-width: 600px;
+            border: var(--glass-border);
+            box-shadow: var(--shadow);
+        }
+        
+        .camera-form-container h3 {
+            margin-bottom: 1rem;
+            text-align: center;
+            color: var(--accent-color);
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-light);
+            font-size: 1rem;
+        }
+        
+        .form-group select option {
+            background: var(--primary-color);
+        }
+        
+        /* Radio buttons styling */
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+        
+        .radio-option:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .radio-option input[type="radio"] {
+            margin-right: 10px;
+        }
+        
+        .model-description {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-left: 25px;
+            margin-top: 3px;
+        }
+        
+        .form-submit {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            width: 100%;
+        }
+        
+        .form-submit:hover {
+            background: var(--accent-color-hover);
+        }
+        
+        .help-text {
+            margin-top: 1rem;
+            text-align: center;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        
+        .model-info {
+            background-color: rgba(52, 152, 219, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        
+        .troubleshooting {
+            margin-top: 2rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: var(--glass-border);
+            box-shadow: var(--shadow);
+            width: 90%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .troubleshooting h3 {
+            color: var(--accent-color);
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .troubleshooting ul {
+            list-style-position: inside;
+            padding-left: 1rem;
+        }
+        
+        .troubleshooting li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .alert-info {
+            background: rgba(52, 152, 219, 0.3);
+            border: 1px solid rgba(52, 152, 219, 0.5);
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-15px);
+            }
+            100% {
+                transform: translateY(0px);
+            }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(52, 152, 219, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(52, 152, 219, 0);
+            }
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-top: var(--glass-border);
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <nav class="navbar">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i> Real-time Object Detection
+            </div>
+        </nav>
+        <div class="tagline">
+            Real-time <span>Object Detection</span>
+        </div>
+    </div>
+    
+    <!-- Add Camera Selection Form -->
+    <div class="camera-form-container">
+        <h3>Detection Settings</h3>
+        <div class="alert alert-info">
+            Not seeing certain objects? Try switching to General Object Detection mode.
+        </div>
+        <form method="POST">
+            {{ form.hidden_tag() }}
+            <div class="form-group">
+                {{ form.camera.label }}
+                {{ form.camera(class="form-control") }}
+            </div>
+            
+            <div class="form-group">
+                {{ form.model_type.label }}
+                <div class="radio-group">
+                    {% for subfield in form.model_type %}
+                    <div class="radio-option">
+                        {{ subfield }}
+                        {{ subfield.label }}
+                    </div>
+                    {% if subfield.data == 'ppe' %}
+                    <div class="model-description">Specialized for detecting safety equipment only (helmets, jackets, gloves, etc.)</div>
+                    {% else %}
+                    <div class="model-description">Detects 80 common objects including people, bicycles, cars, animals, etc.</div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                {{ form.submit(class="form-submit") }}
+            </div>
+        </form>
+        <div class="help-text">
+            <p>Current camera: {{ camera_id }}</p>
+            <p>Current model: {{ model_type }}</p>
+            
+            <div class="model-info">
+                {% if model_type == 'ppe' %}
+                <p><strong>Using PPE Detection Mode</strong></p>
+                <p>This model only detects safety equipment: Helmets, Shields, Jackets, Masks, Eye Wear, Gloves, and Boots.</p>
+                <p>To detect people and other objects, switch to General Object Detection mode.</p>
+                {% else %}
+                <p><strong>Using General Object Detection</strong></p>
+                <p>This model detects 80 common objects including people, bicycles, cars, animals, and more.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="video-container" data-aos="fade-up">
+        <div class="video-wrapper pulse">
+            <div class="video-frame">
+                {% if reload %}
+                <img src="{{ url_for('webapp') }}?model_type={{ model_type }}" alt="Object Detection Stream">
+                {% else %}
+                <img src="{{ url_for('webapp') }}?model_type={{ model_type }}" alt="Object Detection Stream">
+                {% endif %}
+            </div>
+            <div class="status-bar">
+                <div class="stat">
+                    <div class="stat-value" id="objects-count">8</div>
+                    <div class="stat-label">Objects Detected</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="fps">48.5</div>
+                    <div class="stat-label">FPS</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="confidence">90.1%</div>
+                    <div class="stat-label">Confidence</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Troubleshooting Section -->
+    <div class="troubleshooting">
+        <h3>Troubleshooting & Tips</h3>
+        <ul>
+            <li><strong>Missing objects?</strong> If you don't see people, bicycles or other common objects, make sure to select "General Object Detection" mode above.</li>
+            <li><strong>Camera not working?</strong> Ensure your browser has permission to access your camera. Check the address bar for camera permission requests.</li>
+            <li><strong>Multiple cameras?</strong> Try selecting a different camera from the dropdown above.</li>
+            <li><strong>Camera in use?</strong> Close other applications that might be using your camera (like Zoom, Teams, or other video conferencing apps).</li>
+            <li><strong>Still not working?</strong> Refresh the page and try again.</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>Real-time Object Detection with YOLOv8</p>
+    </div>
+    
+    <!-- Add AOS Library -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        AOS.init({
+            duration: 1000,
+            once: true
+        });
+    </script>
+</body>
+</html>

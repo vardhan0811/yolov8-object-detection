@@ -1,0 +1,13 @@
+[Unit]
+Description=Gunicorn instance to serve YOLOv8 Web app
+After=network.target
+
+[Service]
+User=your_username
+Group=www-data
+WorkingDirectory=/home/your_username/FlaskTutorial_YOLOv8_Web_PPE
+Environment="PATH=/home/your_username/FlaskTutorial_YOLOv8_Web_PPE/venv/bin"
+ExecStart=/home/your_username/FlaskTutorial_YOLOv8_Web_PPE/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:5000 flaskapp:app
+
+[Install]
+WantedBy=multi-user.target 
