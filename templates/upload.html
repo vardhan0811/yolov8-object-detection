@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Object Detection - Upload</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 50px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 50px;
+            text-align: center;
+            margin-bottom: 20px;
+            background-color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #007bff;
+            background-color: #f1f8ff;
+        }
+        #preview {
+            max-width: 100%;
+            max-height: 400px;
+            margin-top: 20px;
+            display: none;
+        }
+        #result-image {
+            max-width: 100%;
+            max-height: 500px;
+            margin-top: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        #loading {
+            display: none;
+            margin-top: 20px;
+        }
+        #error-message {
+            color: #dc3545;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0"><i class="fas fa-camera-retro me-2"></i>YOLO Object Detection</h2>
+            </div>
+            <div class="card-body">
+                <div id="upload-section">
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle me-2"></i> 
+                        Upload an image for object detection using YOLOv8.
+                        {% if not model_loaded %}
+                        <strong>Note: Model is still being loaded. Please wait or try again later.</strong>
+                        {% endif %}
+                    </div>
+                    
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <div class="upload-area" id="dropzone">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                            <h4>Drag & Drop Image Here</h4>
+                            <p>or</p>
+                            <input type="file" id="file-input" name="file" accept=".jpg,.jpeg,.png" class="d-none">
+                            <button type="button" class="btn btn-primary" id="browse-button">
+                                <i class="fas fa-folder-open me-2"></i>Browse Files
+                            </button>
+                        </div>
+                        
+                        <div id="preview-container" style="display: none;">
+                            <div class="text-center mb-3">
+                                <img id="preview" class="img-fluid rounded shadow" alt="Preview">
+                                <div class="mt-2">
+                                    <span id="file-name" class="text-muted"></span>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="confidence" class="form-label">Confidence Threshold:</label>
+                                <input type="range" class="form-range" id="confidence" name="confidence" min="0.1" max="0.9" step="0.05" value="0.25">
+                                <div class="d-flex justify-content-between">
+                                    <span>0.1</span>
+                                    <span id="confidence-value">0.25</span>
+                                    <span>0.9</span>
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-search me-2"></i>Detect Objects
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="reset-button">
+                                    <i class="fas fa-redo me-2"></i>Reset
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div id="loading" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Processing your image, please wait...</p>
+                    </div>
+                    
+                    <div id="error-message" class="alert alert-danger mt-3"></div>
+                </div>
+                
+                <div id="result-section" style="display: none;">
+                    <h4 class="mb-3">Detection Results:</h4>
+                    <div class="text-center">
+                        <img id="result-image" class="img-fluid rounded shadow" alt="Detection Result">
+                    </div>
+                    <div class="d-grid gap-2 mt-3">
+                        <button type="button" class="btn btn-primary" id="new-image-button">
+                            <i class="fas fa-plus me-2"></i>Process Another Image
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-3 text-center">
+            <a href="/" class="btn btn-outline-secondary">
+                <i class="fas fa-home me-2"></i>Back to Home
+            </a>
+            <a href="/debug" class="btn btn-outline-info ms-2">
+                <i class="fas fa-bug me-2"></i>Debug Info
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('file-input');
+            const browseButton = document.getElementById('browse-button');
+            const uploadForm = document.getElementById('upload-form');
+            const previewContainer = document.getElementById('preview-container');
+            const preview = document.getElementById('preview');
+            const fileName = document.getElementById('file-name');
+            const confidenceSlider = document.getElementById('confidence');
+            const confidenceValue = document.getElementById('confidence-value');
+            const loading = document.getElementById('loading');
+            const errorMessage = document.getElementById('error-message');
+            const resultSection = document.getElementById('result-section');
+            const resultImage = document.getElementById('result-image');
+            const uploadSection = document.getElementById('upload-section');
+            const resetButton = document.getElementById('reset-button');
+            const newImageButton = document.getElementById('new-image-button');
+            
+            // Event listeners for drag and drop
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('bg-light');
+            });
+            
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('bg-light');
+            });
+            
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('bg-light');
+                
+                if (e.dataTransfer.files.length) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+            
+            // Open file dialog when clicking the browse button
+            browseButton.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            // Handle file selection
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length) {
+                    handleFile(fileInput.files[0]);
+                }
+            });
+            
+            // Handle confidence slider
+            confidenceSlider.addEventListener('input', () => {
+                confidenceValue.textContent = confidenceSlider.value;
+            });
+            
+            // Handle form submission
+            uploadForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                if (!fileInput.files.length) {
+                    showError('Please select an image file first.');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                formData.append('confidence', confidenceSlider.value);
+                
+                // Show loading spinner
+                previewContainer.style.display = 'none';
+                loading.style.display = 'block';
+                errorMessage.style.display = 'none';
+                
+                // Send the file for processing
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loading.style.display = 'none';
+                    
+                    if (data.error) {
+                        showError(data.error);
+                        previewContainer.style.display = 'block';
+                    } else {
+                        // Show the result
+                        uploadSection.style.display = 'none';
+                        resultSection.style.display = 'block';
+                        resultImage.src = data.result_url;
+                        resultImage.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    loading.style.display = 'none';
+                    previewContainer.style.display = 'block';
+                    showError('An error occurred while processing the image.');
+                    console.error('Error:', error);
+                });
+            });
+            
+            // Reset button
+            resetButton.addEventListener('click', resetForm);
+            
+            // New image button
+            newImageButton.addEventListener('click', () => {
+                resultSection.style.display = 'none';
+                uploadSection.style.display = 'block';
+                resetForm();
+            });
+            
+            function handleFile(file) {
+                if (!file.type.match('image.*')) {
+                    showError('Please select an image file (JPG, JPEG, or PNG).');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    fileName.textContent = file.name;
+                    previewContainer.style.display = 'block';
+                    errorMessage.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+                
+                fileInput.files = new DataTransfer().files;
+                fileInput.files = new DataTransfer().files;
+                fileInput.files = new DataTransfer().files;
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                fileInput.files = dataTransfer.files;
+            }
+            
+            function showError(message) {
+                errorMessage.textContent = message;
+                errorMessage.style.display = 'block';
+            }
+            
+            function resetForm() {
+                uploadForm.reset();
+                preview.style.display = 'none';
+                previewContainer.style.display = 'none';
+                confidenceValue.textContent = '0.25';
+                errorMessage.style.display = 'none';
+                fileInput.value = '';
+            }
+        });
+    </script>
+</body>
+</html> 

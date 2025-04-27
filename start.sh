@@ -22,7 +22,8 @@ else
 fi
 
 # Create required directories
-mkdir -p static/files
+mkdir -p static/uploads
+mkdir -p static/results
 
 # Print debug information
 echo "=========================================================="
@@ -40,8 +41,11 @@ fi
 # Check for template files
 echo "=========================================================="
 echo "Checking for required files:"
-if [ -d "FlaskTutorial_YOLOv8_Web_PPE/templates" ]; then
+if [ -d "templates" ]; then
   echo "✅ Templates directory found"
+  ls -la templates
+elif [ -d "FlaskTutorial_YOLOv8_Web_PPE/templates" ]; then
+  echo "✅ Templates directory found in FlaskTutorial_YOLOv8_Web_PPE"
   ls -la FlaskTutorial_YOLOv8_Web_PPE/templates
 else
   echo "❌ Templates directory not found"
@@ -66,9 +70,9 @@ echo "- Checking Ultralytics installation..."
 python -c "import ultralytics; print(f'Ultralytics version: {ultralytics.__version__}')" || echo "❌ Ultralytics import failed"
 
 echo "=========================================================="
-echo "Starting gunicorn on port $PORT..."
-echo "Command: gunicorn enhanced:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=2 --threads=2"
+echo "Starting gunicorn with railway_app.py on port $PORT..."
+echo "Command: gunicorn railway_app:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=1 --threads=4"
 echo "=========================================================="
 
-# Execute gunicorn with the guaranteed port
-exec gunicorn enhanced:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=2 --threads=2 
+# Execute gunicorn with the guaranteed port - using the simplified railway_app.py
+exec gunicorn railway_app:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=1 --threads=4 
