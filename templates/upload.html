@@ -64,7 +64,25 @@
                         <i class="fas fa-info-circle me-2"></i> 
                         Upload an image for object detection using YOLOv8.
                         {% if not model_loaded %}
-                        <strong>Note: Model is still being loaded. Please wait or try again later.</strong>
+                        <strong>Note: Model is still being loaded or there was an error loading the model. 
+                            You can still try uploading an image, but detection may not work until the model is properly loaded.</strong>
+                        <br><br>
+                        <em>Status: Model loaded = {{ model_loaded }}</em>
+                        {% if model_error %}
+                        <div class="alert alert-warning mt-2">
+                            <strong>Model loading error:</strong><br>
+                            {{ model_error }}
+                            <br><br>
+                            <small>This is likely due to PyTorch 2.6 compatibility issues with the model weights. 
+                                The application is attempting to work around this issue.</small>
+                            <div class="mt-2">
+                                <button type="button" id="reload-model-btn" class="btn btn-warning btn-sm">
+                                    <i class="fas fa-sync-alt me-1"></i> Attempt to Reload Model
+                                </button>
+                                <div id="reload-status" class="mt-2" style="display: none;"></div>
+                            </div>
+                        </div>
+                        {% endif %}
                         {% endif %}
                     </div>
                     
@@ -161,6 +179,40 @@
             const uploadSection = document.getElementById('upload-section');
             const resetButton = document.getElementById('reset-button');
             const newImageButton = document.getElementById('new-image-button');
+            
+            // Model reload functionality
+            const reloadModelBtn = document.getElementById('reload-model-btn');
+            const reloadStatus = document.getElementById('reload-status');
+            
+            if (reloadModelBtn) {
+                reloadModelBtn.addEventListener('click', () => {
+                    reloadModelBtn.disabled = true;
+                    reloadModelBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Reloading...';
+                    reloadStatus.style.display = 'block';
+                    reloadStatus.innerHTML = '<div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div> Attempting to reload model...';
+                    
+                    fetch('/reload_model')
+                        .then(response => response.json())
+                        .then(data => {
+                            reloadModelBtn.disabled = false;
+                            reloadModelBtn.innerHTML = '<i class="fas fa-sync-alt me-1"></i> Attempt to Reload Model';
+                            
+                            if (data.success) {
+                                reloadStatus.innerHTML = '<div class="alert alert-success">Model reloaded successfully!</div>';
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 2000);
+                            } else {
+                                reloadStatus.innerHTML = `<div class="alert alert-danger">Failed to reload model: ${data.error || 'Unknown error'}</div>`;
+                            }
+                        })
+                        .catch(error => {
+                            reloadModelBtn.disabled = false;
+                            reloadModelBtn.innerHTML = '<i class="fas fa-sync-alt me-1"></i> Attempt to Reload Model';
+                            reloadStatus.innerHTML = '<div class="alert alert-danger">Error communicating with server</div>';
+                        });
+                });
+            }
             
             // Event listeners for drag and drop
             dropzone.addEventListener('dragover', (e) => {

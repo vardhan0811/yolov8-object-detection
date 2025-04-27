@@ -158,36 +158,73 @@ def load_model_safe():
         logger.info(f"Loading model from: {model_path}")
         logger.info(f"File size: {os.path.getsize(model_path)/1024/1024:.2f} MB")
         
+        # Fix for PyTorch 2.6 weights_only issue
+        try:
+            import torch
+            logger.info("Setting up safe globals for PyTorch model loading")
+            # Import required modules for patching
+            try:
+                import ultralytics.nn.tasks
+                # Add safe globals for ultralytics models
+                torch.serialization.add_safe_globals(['ultralytics.nn.tasks.DetectionModel'])
+                logger.info("Added ultralytics.nn.tasks.DetectionModel to safe globals")
+            except (ImportError, AttributeError) as e:
+                logger.warning(f"Could not patch ultralytics safe globals: {str(e)}")
+            
+            try:
+                # Set the environment variable to allow unsafe loading
+                logger.info("Setting TORCH_ALLOW_WEIGHTS_ONLY_LOAD_DETECTION=1")
+                os.environ["TORCH_ALLOW_WEIGHTS_ONLY_LOAD_DETECTION"] = "1"
+            except Exception as e:
+                logger.warning(f"Could not set environment variable: {str(e)}")
+            
+        except ImportError as e:
+            logger.warning(f"Could not import torch for patching: {str(e)}")
+        
         # Load model with different parameters
         try:
-            # Try with default parameters first
+            # Try with weights_only=False first (safer approach)
+            try:
+                import torch
+                logger.info("Trying to load with torch.serialization.safe_globals context")
+                # Use context manager for safest approach
+                with torch.serialization.safe_globals(['ultralytics.nn.tasks.DetectionModel']):
+                    model = YOLO(model_path, weights_only=False)
+                logger.info("Model loaded successfully with safe_globals context")
+                model_loaded = True
+                return model
+            except (ImportError, AttributeError) as e:
+                logger.warning(f"Context manager approach failed: {str(e)}")
+                # Try without context if not available
+                model = YOLO(model_path, weights_only=False)
+                logger.info("Model loaded successfully with weights_only=False")
+                model_loaded = True
+                return model
+        except Exception as e1:
+            logger.warning(f"Failed to load with weights_only=False: {str(e1)}")
+            
+        try:
+            # Force task='detect' to improve compatibility
+            logger.info("Trying with task='detect' explicitly")
+            model = YOLO(model_path, task='detect')
+            logger.info("Model loaded successfully with task='detect'")
+            model_loaded = True
+            return model
+        except Exception as e2:
+            logger.warning(f"Failed to load with task='detect': {str(e2)}")
+            
+        try:
+            # Try with default parameters
+            logger.info("Trying with default parameters")
             model = YOLO(model_path)
             logger.info("Model loaded successfully with default parameters")
             model_loaded = True
             return model
-        except Exception as e1:
-            logger.warning(f"Failed to load with default parameters: {str(e1)}")
-            
-            try:
-                # Try with weights_only=True
-                model = YOLO(model_path, weights_only=True)
-                logger.info("Model loaded successfully with weights_only=True")
-                model_loaded = True
-                return model
-            except Exception as e2:
-                logger.warning(f"Failed to load with weights_only=True: {str(e2)}")
-                
-                try:
-                    # Try with task='detect' explicitly
-                    model = YOLO(model_path, task='detect')
-                    logger.info("Model loaded successfully with task='detect'")
-                    model_loaded = True
-                    return model
-                except Exception as e3:
-                    model_loading_error = f"All model loading attempts failed: {str(e3)}"
-                    logger.error(model_loading_error)
-                    logger.error(traceback.format_exc())
-                    return None
+        except Exception as e3:
+            model_loading_error = f"All model loading attempts failed: {str(e3)}"
+            logger.error(model_loading_error)
+            logger.error(traceback.format_exc())
+            return None
     
     except Exception as e:
         model_loading_error = f"Error loading model: {str(e)}"
@@ -206,7 +243,37 @@ def process_image(file_path, confidence=0.25):
             model = load_model_safe()
             
             if model is None:
-                return None, "Failed to load model"
+                # Fallback: process the image without detection (just return the original)
+                logger.warning("Model could not be loaded, returning original image as fallback")
+                
+                # Read the original image
+                try:
+                    import cv2
+                    logger.info(f"Reading original image: {file_path}")
+                    image = cv2.imread(file_path)
+                    
+                    if image is None:
+                        return None, "Failed to read image file"
+                    
+                    # Add a text overlay explaining the situation
+                    height, width, _ = image.shape
+                    cv2.putText(image, "Model loading failed - original image shown", 
+                               (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    cv2.putText(image, "See model error for details", 
+                               (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                    
+                    # Save the image with the message
+                    filename = os.path.basename(file_path)
+                    output_filename = f"{os.path.splitext(filename)[0]}_{int(time.time())}_original.jpg"
+                    output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+                    
+                    cv2.imwrite(output_path, image)
+                    logger.info(f"Saved original image with message: {output_path}")
+                    
+                    return output_filename, None
+                except Exception as e:
+                    logger.error(f"Error in fallback image processing: {str(e)}")
+                    return None, "Failed to load model and process image"
         
         # Check if file exists
         if not os.path.exists(file_path):
@@ -229,9 +296,17 @@ def process_image(file_path, confidence=0.25):
             
             # Check if results are valid
             if results is None or len(results) == 0:
-                error_msg = "No detection results returned"
-                logger.error(error_msg)
-                return None, error_msg
+                logger.warning("No detection results returned, using original image with message")
+                
+                # Read the original image
+                image = cv2.imread(file_path)
+                # Add a text overlay explaining the situation
+                cv2.putText(image, "No objects detected", 
+                           (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                # Save the image with the message
+                cv2.imwrite(output_path, image)
+                
+                return output_filename, None
                 
             # Save result image
             for r in results:
@@ -245,7 +320,21 @@ def process_image(file_path, confidence=0.25):
             error_msg = f"Error during inference: {str(e)}"
             logger.error(error_msg)
             logger.error(traceback.format_exc())
-            return None, error_msg
+            
+            # Fallback to returning the original image with an error message
+            try:
+                image = cv2.imread(file_path)
+                # Add a text overlay explaining the error
+                cv2.putText(image, "Error during detection", 
+                           (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                cv2.putText(image, str(e)[:50], 
+                           (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                # Save the image with the message
+                cv2.imwrite(output_path, image)
+                
+                return output_filename, None
+            except:
+                return None, error_msg
     
     except Exception as e:
         error_msg = f"Error processing image: {str(e)}"
@@ -295,25 +384,13 @@ def index():
                 if file.endswith('.pt'):
                     model_files.append(file)
         
-        return render_template('index.html', 
-                              models=model_files, 
-                              model_loaded=model_loaded,
-                              model_error=model_loading_error)
+        # Don't try to render a template that might reference webcam, just send directly to upload page
+        return redirect(url_for('upload_file'))
     except Exception as e:
-        logger.error(f"Error rendering index page: {str(e)}")
+        logger.error(f"Error in index route: {str(e)}")
         logger.error(traceback.format_exc())
-        return f"""
-        <html>
-        <head><title>YOLO Detection App</title></head>
-        <body>
-            <h1>YOLO Detection App</h1>
-            <p>Error rendering template: {str(e)}</p>
-            <p>Model loaded: {model_loaded}</p>
-            <p>Model error: {model_loading_error}</p>
-            <p>Try the <a href="/upload">upload page</a> directly.</p>
-        </body>
-        </html>
-        """
+        # Send directly to upload page as fallback
+        return redirect(url_for('upload_file'))
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
@@ -394,6 +471,41 @@ def debug():
     }
     
     return jsonify(debug_info)
+
+@app.route('/reload_model')
+def reload_model():
+    """Manually attempt to reload the model"""
+    global model, model_loaded, model_loading_error
+    
+    # Clear current model
+    model = None
+    model_loaded = False
+    model_loading_error = None
+    
+    # Set environment variables to help with loading
+    os.environ["TORCH_ALLOW_WEIGHTS_ONLY_LOAD_DETECTION"] = "1"
+    
+    # Try to import and patch torch
+    try:
+        import torch
+        try:
+            import ultralytics.nn.tasks
+            torch.serialization.add_safe_globals(['ultralytics.nn.tasks.DetectionModel'])
+            logger.info("Added ultralytics.nn.tasks.DetectionModel to safe globals")
+        except (ImportError, AttributeError) as e:
+            logger.warning(f"Could not patch ultralytics safe globals: {str(e)}")
+    except ImportError:
+        logger.warning("Could not import torch for patching")
+    
+    # Attempt to reload
+    model = load_model_safe()
+    
+    # Return status
+    return jsonify({
+        'success': model_loaded,
+        'model_loaded': model_loaded,
+        'error': model_loading_error
+    })
 
 # Initialize the application
 logger.info("Initializing application...")
