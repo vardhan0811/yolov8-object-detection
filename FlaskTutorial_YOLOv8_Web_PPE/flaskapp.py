@@ -22,8 +22,7 @@ sys.path.insert(0, current_dir)
 # Required to run the YOLOv8 model
 import cv2
 
-# YOLO_Video is the python file which contains the code for our object detection model
-#Video Detection is the Function which performs Object Detection on Input Video
+# Import the module but don't run the functions yet - this allows the app to start faster
 from YOLO_Video import video_detection
 app = Flask(__name__)
 
@@ -32,6 +31,11 @@ app.config['UPLOAD_FOLDER'] = 'static/files'
 
 # Ensure upload folder exists
 os.makedirs(os.path.join(current_dir, app.config['UPLOAD_FOLDER']), exist_ok=True)
+
+# Add health check route for Railway deployment
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy"}), 200
 
 #Use FlaskForm to get input video file  from user
 class UploadFileForm(FlaskForm):

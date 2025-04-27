@@ -4,6 +4,43 @@ import math
 import os
 import time
 import numpy as np
+import threading
+
+# Cache for loaded models to prevent reloading
+model_cache = {}
+model_cache_lock = threading.Lock()
+
+def get_model(weights_path, model_type):
+    """Get model from cache or load it if not present"""
+    cache_key = f"{weights_path}_{model_type}"
+    
+    with model_cache_lock:
+        if cache_key in model_cache:
+            print(f"Using cached model: {cache_key}")
+            return model_cache[cache_key]
+        
+        print(f"Loading model from: {weights_path}, Model type: {model_type}")
+        try:
+            # Attempt to load the model
+            model = YOLO(weights_path)
+            model_cache[cache_key] = model
+            return model
+        except Exception as e:
+            print(f"Error loading model: {str(e)}")
+            # If local model fails, try to use the default model from Ultralytics hub
+            try:
+                if model_type == 'ppe':
+                    # Fall back to yolov8n if PPE model fails
+                    print("Falling back to general YOLOv8n model")
+                    model = YOLO("yolov8n")
+                else:
+                    # Already trying to use general model, so use yolov8n specifically
+                    model = YOLO("yolov8n")
+                model_cache[cache_key] = model
+                return model
+            except Exception as e2:
+                print(f"Could not load fallback model either: {str(e2)}")
+                raise
 
 def video_detection(path_x, model_type='ppe'):
     video_capture = path_x
@@ -59,7 +96,7 @@ def video_detection(path_x, model_type='ppe'):
                 
                 # Load model and process the image
                 try:
-                    model = YOLO(weights_path)
+                    model = get_model(weights_path, model_type)
                     results = model(img, stream=True)
                     
                     # Process detection results
@@ -186,7 +223,7 @@ def video_detection(path_x, model_type='ppe'):
     print(f"Loading model from: {weights_path}, Model type: {model_type}")
     
     try:
-        model = YOLO(weights_path)
+        model = get_model(weights_path, model_type)
         
         # Initialize frame counter for error reporting
         frame_count = 0

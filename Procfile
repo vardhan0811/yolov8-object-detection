@@ -1,1 +1,1 @@
-web: cd FlaskTutorial_YOLOv8_Web_PPE && gunicorn flaskapp:app --bind 0.0.0.0:$PORT 
+web: cd FlaskTutorial_YOLOv8_Web_PPE && gunicorn flaskapp:app --bind 0.0.0.0:$PORT --workers=1 --threads=2 --timeout=300 

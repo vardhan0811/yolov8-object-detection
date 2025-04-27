@@ -5,10 +5,10 @@
     "buildCommand": "echo 'Building application...'"
   },
   "deploy": {
-    "startCommand": "cd FlaskTutorial_YOLOv8_Web_PPE && gunicorn flaskapp:app --bind 0.0.0.0:$PORT",
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 300,
+    "startCommand": "cd FlaskTutorial_YOLOv8_Web_PPE && gunicorn flaskapp:app --bind 0.0.0.0:$PORT --workers=1 --threads=2 --timeout=300",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 600,
     "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
+    "restartPolicyMaxRetries": 5
   }
 } 
