@@ -14,6 +14,15 @@ import sys
 import cv2
 import numpy as np
 import time
+import platform
+
+# Print debug info at startup
+print("=" * 50)
+print("STARTUP DEBUG INFO")
+print(f"Python version: {platform.python_version()}")
+print(f"Platform: {platform.platform()}")
+print(f"Working directory: {os.getcwd()}")
+print("=" * 50)
 
 # Add the current directory to the path so we can import our modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +32,10 @@ sys.path.insert(0, current_dir)
 import cv2
 
 # Import the module but don't run the functions yet - this allows the app to start faster
+print("Importing video_detection module...")
 from YOLO_Video import video_detection
+print("Module imported successfully")
+
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cyberbot')
@@ -32,10 +44,36 @@ app.config['UPLOAD_FOLDER'] = 'static/files'
 # Ensure upload folder exists
 os.makedirs(os.path.join(current_dir, app.config['UPLOAD_FOLDER']), exist_ok=True)
 
-# Add health check route for Railway deployment
+# Multiple health check routes for Railway deployment
 @app.route('/health')
 def health_check():
+    print("Health check endpoint called")
     return jsonify({"status": "healthy"}), 200
+
+@app.route('/healthz')
+def healthz():
+    print("Healthz endpoint called")
+    return jsonify({"status": "healthy"}), 200
+
+@app.route('/ping')
+def ping():
+    print("Ping endpoint called")
+    return "pong", 200
+
+@app.route('/debug')
+def debug():
+    """Endpoint for debugging deployment issues"""
+    debug_info = {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "working_directory": os.getcwd(),
+        "environment_variables": {k: v for k, v in os.environ.items() if not k.startswith("AWS")},
+        "app_config": {
+            "SECRET_KEY_SET": bool(app.config.get('SECRET_KEY')),
+            "UPLOAD_FOLDER": app.config.get('UPLOAD_FOLDER'),
+        }
+    }
+    return jsonify(debug_info), 200
 
 #Use FlaskForm to get input video file  from user
 class UploadFileForm(FlaskForm):
