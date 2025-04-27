@@ -4,7 +4,7 @@ Werkzeug==2.3.7
 flask-wtf==1.2.1
 WTForms==3.0.1
 Pillow==10.0.1
-opencv-python-headless==4.8.1.78
+opencv-python==4.8.1.78
 numpy
 ultralytics==8.1.5
 psutil==5.9.5

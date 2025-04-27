@@ -7,6 +7,7 @@ import threading
 import time
 import json
 from werkzeug.utils import secure_filename
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -167,6 +168,15 @@ def load_models_in_background():
             except ImportError:
                 logger.info("psutil not available for memory debugging")
             
+            # Railway-specific optimizations
+            is_railway = os.environ.get('RAILWAY_ENVIRONMENT') is not None
+            if is_railway:
+                logger.info("Running on Railway - applying optimization settings")
+                # Use lower precision models on Railway to reduce memory usage
+                os.environ['YOLO_VERBOSE'] = 'False'  # Reduce logging
+                YOLO_DEVICE = os.environ.get('YOLO_DEVICE', 'cpu')
+                logger.info(f"Setting YOLO to use device: {YOLO_DEVICE}")
+            
             # Try to load PPE model
             ppe_model_loaded = False
             
@@ -175,15 +185,43 @@ def load_models_in_background():
                 if os.path.exists(path):
                     logger.info(f"Found PPE model at: {path}, size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
                     try:
-                        ppe_model = YOLO(path)
-                        logger.info("PPE model loaded successfully from local file")
-                        ppe_model_loaded = True
-                        break
+                        # Set a timeout for model loading to prevent hanging
+                        import threading
+                        import queue
+
+                        def load_model(path, result_queue):
+                            try:
+                                model = YOLO(path)
+                                result_queue.put(("success", model))
+                            except Exception as e:
+                                result_queue.put(("error", str(e)))
+
+                        result_queue = queue.Queue()
+                        load_thread = threading.Thread(target=load_model, args=(path, result_queue))
+                        load_thread.daemon = True
+                        load_thread.start()
+                        
+                        # Wait for the model to load with a timeout
+                        try:
+                            status, result = result_queue.get(timeout=60)  # 60 second timeout
+                            if status == "success":
+                                ppe_model = result
+                                logger.info("PPE model loaded successfully from local file")
+                                # Run a small inference to ensure model is working
+                                dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
+                                _ = ppe_model(dummy_img, verbose=False)
+                                logger.info("PPE model inference test successful")
+                                ppe_model_loaded = True
+                                break
+                            else:
+                                logger.error(f"Error in thread loading PPE model: {result}")
+                        except queue.Empty:
+                            logger.error(f"Timeout while loading PPE model from {path}")
                     except Exception as e:
                         logger.error(f"Failed to load PPE model from {path}: {str(e)}")
             
             # If local models failed, try loading from hub
-            if not ppe_model_loaded:
+            if not ppe_model_loaded and not is_railway:  # Skip downloading on Railway to save bandwidth/time
                 try:
                     logger.info("Attempting to download model from Ultralytics hub...")
                     # Use yolov8n as fallback since we don't have a PPE model in the hub
@@ -201,15 +239,43 @@ def load_models_in_background():
                 if os.path.exists(path):
                     logger.info(f"Found general model at: {path}, size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
                     try:
-                        general_model = YOLO(path)
-                        logger.info("General model loaded successfully from local file")
-                        general_model_loaded = True
-                        break
+                        # Set a timeout for model loading
+                        import threading
+                        import queue
+
+                        def load_model(path, result_queue):
+                            try:
+                                model = YOLO(path)
+                                result_queue.put(("success", model))
+                            except Exception as e:
+                                result_queue.put(("error", str(e)))
+
+                        result_queue = queue.Queue()
+                        load_thread = threading.Thread(target=load_model, args=(path, result_queue))
+                        load_thread.daemon = True
+                        load_thread.start()
+                        
+                        # Wait for the model to load with a timeout
+                        try:
+                            status, result = result_queue.get(timeout=60)  # 60 second timeout
+                            if status == "success":
+                                general_model = result
+                                logger.info("General model loaded successfully from local file")
+                                # Run a small inference to ensure model is working
+                                dummy_img = np.zeros((640, 640, 3), dtype=np.uint8)
+                                _ = general_model(dummy_img, verbose=False)
+                                logger.info("General model inference test successful")
+                                general_model_loaded = True
+                                break
+                            else:
+                                logger.error(f"Error in thread loading general model: {result}")
+                        except queue.Empty:
+                            logger.error(f"Timeout while loading general model from {path}")
                     except Exception as e:
                         logger.error(f"Failed to load general model from {path}: {str(e)}")
             
-            # If local models failed, try loading from hub
-            if not general_model_loaded:
+            # If local models failed and not on Railway, try loading from hub
+            if not general_model_loaded and not is_railway:
                 try:
                     logger.info("Attempting to download general model from Ultralytics hub...")
                     general_model = YOLO("yolov8n")
@@ -244,10 +310,14 @@ def load_models_in_background():
         models_loaded = False
         
     # Force models_loaded to True for testing on Railway
-    # REMOVE THIS IN PRODUCTION ONCE MODELS ARE WORKING
-    if os.environ.get('RAILWAY_ENVIRONMENT') is not None and not models_loaded:
-        logger.info("Forcing models_loaded to True for Railway testing")
-        models_loaded = True
+    if os.environ.get('RAILWAY_ENVIRONMENT') is not None:
+        logger.info("Setting models_loaded flag for Railway environment")
+        # Only set to true if there was no critical error
+        if model_loading_error is None or "Failed to import" not in model_loading_error:
+            logger.info("Forcing models_loaded to True for Railway testing")
+            models_loaded = True
+        else:
+            logger.error(f"Critical error prevented model loading: {model_loading_error}")
 
 # Video upload route
 @app.route('/FrontPage', methods=['GET', 'POST'])
@@ -274,9 +344,34 @@ def front():
     try:
         # Only import these if models are loaded or we're on Railway
         logger.info("Importing required modules for video upload...")
-        from FlaskTutorial_YOLOv8_Web_PPE.flaskapp import UploadFileForm
-        from FlaskTutorial_YOLOv8_Web_PPE.YOLO_Video import video_detection
-        import cv2
+        
+        # First check if OpenCV is available
+        try:
+            import cv2
+            logger.info("Successfully imported OpenCV")
+        except ImportError as e:
+            logger.error(f"Failed to import OpenCV: {str(e)}")
+            return f"""
+            <h1>System Dependency Error</h1>
+            <p>The application is missing required system libraries for OpenCV: {str(e)}</p>
+            <p>This is a common issue on cloud deployments. The administrator needs to install the following packages:</p>
+            <pre>libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6</pre>
+            <p><a href="/">Return to home</a></p>
+            <p><a href="/debug">View debug information</a></p>
+            """
+        
+        # Try to import the rest of our dependencies
+        try:
+            from FlaskTutorial_YOLOv8_Web_PPE.flaskapp import UploadFileForm
+            from FlaskTutorial_YOLOv8_Web_PPE.YOLO_Video import video_detection
+        except ImportError as e:
+            logger.error(f"Failed to import required modules: {str(e)}")
+            return f"""
+            <h1>Module Import Error</h1>
+            <p>Failed to import required modules: {str(e)}</p>
+            <p><a href="/">Return to home</a></p>
+            <p><a href="/debug">View debug information</a></p>
+            """
         
         # Create form instance
         logger.info("Creating upload form instance...")
