@@ -21,10 +21,21 @@ def get_model(weights_path, model_type):
         
         print(f"Loading model from: {weights_path}, Model type: {model_type}")
         try:
-            # Attempt to load the model
-            model = YOLO(weights_path)
-            model_cache[cache_key] = model
-            return model
+            # First try loading with weights_only=False (default pre PyTorch 2.6)
+            try:
+                print("Attempting to load model with weights_only=False...")
+                model = YOLO(weights_path, weights_only=False)
+                model_cache[cache_key] = model
+                print("Model loaded successfully with weights_only=False")
+                return model
+            except Exception as e1:
+                # If that fails, try with weights_only=True (new default in PyTorch 2.6)
+                print(f"Loading with weights_only=False failed: {str(e1)}")
+                print("Attempting to load model with weights_only=True...")
+                model = YOLO(weights_path, weights_only=True)
+                model_cache[cache_key] = model
+                print("Model loaded successfully with weights_only=True")
+                return model
         except Exception as e:
             print(f"Error loading model: {str(e)}")
             # If local model fails, try to use the default model from Ultralytics hub

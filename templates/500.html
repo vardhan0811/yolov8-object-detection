@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 - Server Error</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        .error-container {
+            max-width: 600px;
+            margin: 50px auto;
+            text-align: center;
+            padding: 40px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .error-icon {
+            font-size: 8rem;
+            color: #e74c3c;
+            margin-bottom: 20px;
+        }
+        
+        .error-code {
+            font-size: 4rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #e74c3c;
+        }
+        
+        .error-message {
+            font-size: 1.5rem;
+            margin-bottom: 30px;
+        }
+        
+        .btn-home {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-home:hover {
+            background-color: #2980b9;
+            transform: translateY(-3px);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="{{ url_for('index') }}">Home</a>
+            <a href="{{ url_for('webcam') }}">Webcam Detection</a>
+            <a href="{{ url_for('about') }}">About</a>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <div class="container">
+            <div class="error-container">
+                <i class="fas fa-cogs error-icon"></i>
+                <div class="error-code">500</div>
+                <div class="error-message">Internal Server Error</div>
+                <p>Something went wrong on our end. Our team has been notified and we're working to fix the issue.</p>
+                <a href="{{ url_for('index') }}" class="btn-home">
+                    <i class="fas fa-home"></i> Go to Homepage
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 Real-time Object Detection. Powered by YOLOv8 and Flask.</p>
+        </div>
+    </footer>
+</body>
+</html> 

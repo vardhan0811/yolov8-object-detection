@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Object Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .webcam-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .webcam-feed {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .btn-detection {
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+        
+        .btn-start {
+            background-color: #27ae60;
+        }
+        
+        .btn-stop {
+            background-color: #e74c3c;
+        }
+        
+        .confidence-control {
+            display: flex;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .confidence-control label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        #confidence-value {
+            margin-left: 10px;
+            background-color: rgba(52, 152, 219, 0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <a href="{{ url_for('index') }}">Home</a>
+            <a href="{{ url_for('webcam') }}">Webcam Detection</a>
+            <a href="{{ url_for('about') }}">About</a>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <div class="container" data-aos="fade-up">
+            <h1>Webcam Object Detection</h1>
+            <p>Detect objects in real-time using your webcam</p>
+            
+            <div class="confidence-control" data-aos="fade-up" data-aos-delay="100">
+                <label for="confidence">Confidence Threshold:</label>
+                <input type="range" id="confidence" min="0.1" max="0.9" step="0.05" value="0.25">
+                <span id="confidence-value">0.25</span>
+            </div>
+            
+            <div class="webcam-container" data-aos="fade-up" data-aos-delay="200">
+                <img src="{{ url_for('video_feed') }}" alt="Webcam Feed" class="webcam-feed">
+            </div>
+            
+            <div class="controls" data-aos="fade-up" data-aos-delay="300">
+                <button id="start-detection" class="btn btn-start btn-detection">Start Detection</button>
+                <button id="stop-detection" class="btn btn-stop btn-detection" disabled>Stop Detection</button>
+            </div>
+            
+            <div id="error-message" class="error" style="display: none;"></div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 Real-time Object Detection. Powered by YOLOv8 and Flask.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize AOS
+        AOS.init();
+        
+        // Update confidence value display
+        document.getElementById('confidence').addEventListener('input', function() {
+            document.getElementById('confidence-value').textContent = this.value;
+        });
+        
+        // Start detection
+        document.getElementById('start-detection').addEventListener('click', function() {
+            const confidence = document.getElementById('confidence').value;
+            
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+            document.getElementById('error-message').style.display = 'none';
+            
+            // Start detection
+            fetch('{{ url_for("start_detection") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `confidence=${confidence}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                document.getElementById('start-detection').innerHTML = 'Start Detection';
+                
+                if (data.error) {
+                    showError(data.error);
+                    document.getElementById('start-detection').disabled = false;
+                    return;
+                }
+                
+                // Enable stop button, disable start button
+                document.getElementById('start-detection').disabled = true;
+                document.getElementById('stop-detection').disabled = false;
+            })
+            .catch(error => {
+                document.getElementById('start-detection').innerHTML = 'Start Detection';
+                document.getElementById('start-detection').disabled = false;
+                showError('An error occurred. Please try again.');
+                console.error(error);
+            });
+        });
+        
+        // Stop detection
+        document.getElementById('stop-detection').addEventListener('click', function() {
+            // Show loading state
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Stopping...';
+            document.getElementById('error-message').style.display = 'none';
+            
+            // Stop detection
+            fetch('{{ url_for("stop_detection") }}', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                document.getElementById('stop-detection').innerHTML = 'Stop Detection';
+                
+                if (data.error) {
+                    showError(data.error);
+                    document.getElementById('stop-detection').disabled = false;
+                    return;
+                }
+                
+                // Enable start button, disable stop button
+                document.getElementById('start-detection').disabled = false;
+                document.getElementById('stop-detection').disabled = true;
+            })
+            .catch(error => {
+                document.getElementById('stop-detection').innerHTML = 'Stop Detection';
+                document.getElementById('stop-detection').disabled = false;
+                showError('An error occurred. Please try again.');
+                console.error(error);
+            });
+        });
+        
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 
