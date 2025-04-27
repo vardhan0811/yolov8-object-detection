@@ -3,30 +3,47 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# C extensions
+*.so
+
 # Distribution / packaging
 dist/
 build/
 *.egg-info/
 
-# Virtual environment
+# Virtual environments
 venv/
 env/
 ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Model download files
+*.partial
+
+# YOLO videos and large files
+output.avi
+*.mp4
+*.avi
+
+# Local configuration
+.env.local
 
 # Environment variables
 .env
 .env.*
 
 # Large files
-*.mp4
-*.avi
 *.pt
 Videos/
 Images/
-
-# Debug and IDE files
-.vscode/
-.idea/
 
 # Temporary files
 temp/
