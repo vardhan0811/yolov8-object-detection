@@ -68,48 +68,41 @@ def load_model(model_path=None, confidence=0.25, device='cpu'):
         
         # If model_path is None, use default YOLOv8n model
         if model_path is None or not os.path.exists(model_path):
-            # Get available models
-            models = ensure_yolo_weights(['yolov8n.pt'])
-            if not models:
-                logger.error("Failed to load YOLOv8 model: No models available")
-                return None
-            model_path = models.get('yolov8n.pt')
+            # First check current directory for models
+            current_dir_models = [f for f in os.listdir('.') if f.endswith('.pt')]
+            if current_dir_models:
+                model_path = current_dir_models[0]
+                logger.info(f"Found model in current directory: {model_path}")
+            else:
+                # Get available models from YOLO-Weights directory
+                weights_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'YOLO-Weights')
+                if os.path.exists(weights_dir):
+                    weights_dir_models = [os.path.join(weights_dir, f) for f in os.listdir(weights_dir) if f.endswith('.pt')]
+                    if weights_dir_models:
+                        model_path = weights_dir_models[0]
+                        logger.info(f"Found model in YOLO-Weights directory: {model_path}")
+                    else:
+                        # Try to download default model
+                        models = ensure_yolo_weights(['yolov8n.pt'])
+                        if not models:
+                            logger.error("Failed to load YOLOv8 model: No models available")
+                            return None
+                        model_path = models.get('yolov8n.pt')
         
-        # Load model
+        # Load model without weights_only parameter (use defaults)
         logger.info(f"Loading YOLOv8 model from {model_path}")
         model = YOLO(model_path)
         logger.info(f"Model loaded successfully: {model}")
         return model
         
-    except ImportError:
-        logger.warning("Ultralytics package not found. Trying to use PyTorch directly.")
-        try:
-            import torch
-            
-            if model_path is None or not os.path.exists(model_path):
-                # Get available models
-                models = ensure_yolo_weights(['yolov8n.pt'])
-                if not models:
-                    logger.error("Failed to load YOLOv8 model: No models available")
-                    return None
-                model_path = models.get('yolov8n.pt')
-            
-            # Load model using PyTorch
-            model = torch.load(model_path, map_location=device)
-            if hasattr(model, 'model'):
-                model = model.model  # Unwrap the model if it's in a wrapper class
-            
-            # Set model to evaluation mode
-            model.eval()
-            logger.info(f"Model loaded with PyTorch: {model}")
-            return model
-            
-        except Exception as e:
-            logger.error(f"Failed to load model: {str(e)}")
-            return None
+    except ImportError as e:
+        logger.error(f"Ultralytics package not found: {str(e)}")
+        return None
     
     except Exception as e:
         logger.error(f"Failed to load model: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 def process_image(file_path, confidence=0.25, device='cpu'):
@@ -119,9 +112,12 @@ def process_image(file_path, confidence=0.25, device='cpu'):
     try:
         # Ensure model is loaded
         if model is None:
+            logger.info("Model not loaded yet, loading now...")
             model = load_model(confidence=confidence, device=device)
             if model is None:
-                return None, "Failed to load model"
+                error_msg = "Failed to load YOLO model"
+                logger.error(error_msg)
+                return None, error_msg
 
         # Create a unique output filename
         filename = os.path.basename(file_path)
@@ -131,51 +127,37 @@ def process_image(file_path, confidence=0.25, device='cpu'):
         # Perform detection with the model
         logger.info(f"Processing image: {file_path}")
         try:
-            # Try with Ultralytics API
+            # Use Ultralytics API for detection
+            logger.info(f"Running inference with confidence threshold: {confidence}")
             results = model(file_path, conf=confidence)
+            
+            # Check if results are empty or None
+            if results is None or len(results) == 0:
+                error_msg = "No detection results returned from model"
+                logger.error(error_msg)
+                return None, error_msg
+                
             # Save the results
             for r in results:
                 im_array = r.plot()  # plot a BGR numpy array of predictions
                 cv2.imwrite(output_path, im_array)
-        except AttributeError:
-            # If using PyTorch directly
-            image = cv2.imread(file_path)
-            # Preprocess for PyTorch model
-            # This is a simplified version; actual preprocessing depends on model
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            image_resized = cv2.resize(image_rgb, (640, 640))
-            image_tensor = np.transpose(image_resized, (2, 0, 1))
-            image_tensor = np.expand_dims(image_tensor, 0).astype(np.float32) / 255.0
+                
+            logger.info(f"Image processed successfully: {output_path}")
+            return output_filename, None
             
-            import torch
-            with torch.no_grad():
-                # Convert to tensor and move to device
-                input_tensor = torch.from_numpy(image_tensor).to(device)
-                # Forward pass
-                output = model(input_tensor)
-                
-                # Process results (simplified)
-                # This needs to be adapted to match the model's output format
-                # This is a placeholder for demonstration
-                boxes = output[0]
-                
-                # Draw boxes on image
-                result_image = image.copy()
-                for box in boxes:
-                    x1, y1, x2, y2, conf, cls = box
-                    if conf > confidence:
-                        cv2.rectangle(result_image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                        cv2.putText(result_image, f"Class {int(cls)}: {conf:.2f}", 
-                                    (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                
-                cv2.imwrite(output_path, result_image)
-        
-        logger.info(f"Image processed successfully: {output_path}")
-        return output_filename, None
+        except Exception as e:
+            error_msg = f"Error during model inference: {str(e)}"
+            logger.error(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
+            return None, error_msg
     
     except Exception as e:
-        logger.error(f"Error processing image: {str(e)}")
-        return None, str(e)
+        error_msg = f"Error processing image: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(traceback.format_exc())
+        return None, error_msg
 
 def process_video(file_path, confidence=0.25, device='cpu'):
     """Process a video file for object detection"""
@@ -246,66 +228,82 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Handle file upload for processing"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if not allowed_file(file.filename):
-        return jsonify({'error': f'File type not allowed. Allowed types: {", ".join(app.config["ALLOWED_EXTENSIONS"])}'}), 400
-    
-    # Get parameters
-    confidence = float(request.form.get('confidence', 0.25))
-    device = request.form.get('device', 'cpu')
-    model_path = request.form.get('model', None)
-    
-    if model_path == 'default':
-        model_path = None
-    
-    # Create a unique filename
-    filename = secure_filename(file.filename)
-    unique_filename = f"{uuid.uuid4()}_{filename}"
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-    
-    # Save the file
-    file.save(file_path)
-    logger.info(f"File saved: {file_path}")
-    
-    # Process the file based on its type
-    file_extension = filename.rsplit('.', 1)[1].lower()
-    
-    if file_extension in {'png', 'jpg', 'jpeg'}:
-        # Process image
-        output_filename, error = process_image(file_path, confidence, device)
-        if error:
-            return jsonify({'error': error}), 500
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
         
-        # Return the result
-        result_url = url_for('static', filename=f'results/{output_filename}')
-        return jsonify({
-            'success': True,
-            'result_type': 'image',
-            'result_url': result_url
-        })
-    
-    elif file_extension in {'mp4', 'avi', 'mov', 'mkv'}:
-        # Process video
-        output_filename, error = process_video(file_path, confidence, device)
-        if error:
-            return jsonify({'error': error}), 500
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
         
-        # Return the result
-        result_url = url_for('static', filename=f'results/{output_filename}')
-        return jsonify({
-            'success': True,
-            'result_type': 'video',
-            'result_url': result_url
-        })
-    
-    else:
-        return jsonify({'error': 'Unsupported file type'}), 400
+        if not allowed_file(file.filename):
+            return jsonify({'error': f'File type not allowed. Allowed types: {", ".join(app.config["ALLOWED_EXTENSIONS"])}'}), 400
+        
+        # Get parameters
+        confidence = float(request.form.get('confidence', 0.25))
+        device = request.form.get('device', 'cpu')
+        model_path = request.form.get('model', None)
+        
+        if model_path == 'default':
+            model_path = None
+        elif model_path:
+            if not os.path.exists(model_path):
+                logger.warning(f"Specified model path does not exist: {model_path}")
+                model_path = None
+        
+        # Create a unique filename
+        filename = secure_filename(file.filename)
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
+        # Save the file
+        file.save(file_path)
+        logger.info(f"File saved: {file_path}")
+        
+        # Process the file based on its type
+        file_extension = filename.rsplit('.', 1)[1].lower()
+        
+        if file_extension in {'png', 'jpg', 'jpeg'}:
+            # Process image
+            logger.info(f"Processing image with confidence: {confidence}, device: {device}, model: {model_path}")
+            output_filename, error = process_image(file_path, confidence, device)
+            if error:
+                logger.error(f"Error processing image: {error}")
+                return jsonify({'error': error}), 500
+            
+            # Return the result
+            result_url = url_for('static', filename=f'results/{output_filename}')
+            return jsonify({
+                'success': True,
+                'result_type': 'image',
+                'result_url': result_url
+            })
+        
+        elif file_extension in {'mp4', 'avi', 'mov', 'mkv'}:
+            # Process video
+            logger.info(f"Processing video with confidence: {confidence}, device: {device}, model: {model_path}")
+            output_filename, error = process_video(file_path, confidence, device)
+            if error:
+                logger.error(f"Error processing video: {error}")
+                return jsonify({'error': error}), 500
+            
+            # Return the result
+            result_url = url_for('static', filename=f'results/{output_filename}')
+            return jsonify({
+                'success': True,
+                'result_type': 'video',
+                'result_url': result_url
+            })
+        
+        else:
+            return jsonify({'error': 'Unsupported file type'}), 400
+            
+    except Exception as e:
+        error_msg = f"Unexpected error during file upload: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': error_msg}), 500
 
 @app.route('/webcam')
 def webcam():
@@ -416,6 +414,19 @@ def internal_server_error(e):
 if __name__ == '__main__':
     # Ensure YOLO weights are available
     ensure_yolo_weights()
+    
+    # Pre-load model
+    logger.info("Pre-loading model at application startup")
+    try:
+        model = load_model()
+        if model is None:
+            logger.warning("Failed to pre-load model, will try again when processing requests")
+        else:
+            logger.info("Model pre-loaded successfully")
+    except Exception as e:
+        logger.error(f"Error pre-loading model: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
     
     # Run the Flask app
     port = int(os.environ.get('PORT', 5000))
