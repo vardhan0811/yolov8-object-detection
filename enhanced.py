@@ -27,15 +27,18 @@ if app_dir not in sys.path:
 template_folder = os.path.join(app_dir, 'templates')
 static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 app_static_folder = os.path.join(app_dir, 'static')
+github_static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'github_upload', 'static')
 
 logger.info(f"Template folder: {template_folder}")
 logger.info(f"Static folder: {static_folder}")
 logger.info(f"App static folder: {app_static_folder}")
+logger.info(f"GitHub static folder: {github_static_folder}")
 
 # Check if template and static folders exist
 logger.info(f"Templates directory exists: {os.path.exists(template_folder)}")
 logger.info(f"Static directory exists: {os.path.exists(static_folder)}")
 logger.info(f"App static directory exists: {os.path.exists(app_static_folder)}")
+logger.info(f"GitHub static directory exists: {os.path.exists(github_static_folder)}")
 
 # List static files for debugging
 if os.path.exists(static_folder):
@@ -53,6 +56,7 @@ app = Flask(__name__,
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'cyberbot')
 app.config['UPLOAD_FOLDER'] = os.path.join(static_folder, 'files')
 app.config['APP_STATIC_FOLDER'] = app_static_folder
+app.config['GITHUB_STATIC_FOLDER'] = github_static_folder
 
 # Global variables for model loading
 model_loading_thread = None
@@ -101,6 +105,9 @@ def custom_static(filename):
     # First try our static folder
     if os.path.exists(os.path.join(static_folder, filename)):
         return send_from_directory(static_folder, filename)
+    # Then try the github static folder
+    elif os.path.exists(os.path.join(github_static_folder, filename)):
+        return send_from_directory(github_static_folder, filename)
     # If not found, try the app's static folder
     elif os.path.exists(os.path.join(app_static_folder, filename)):
         return send_from_directory(app_static_folder, filename)
@@ -115,6 +122,9 @@ def serve_image(filename):
     # First check our static/images folder
     if os.path.exists(os.path.join(static_folder, 'images', filename)):
         return send_from_directory(os.path.join(static_folder, 'images'), filename)
+    # Then check the github static/images folder
+    elif os.path.exists(os.path.join(github_static_folder, 'images', filename)):
+        return send_from_directory(os.path.join(github_static_folder, 'images'), filename)
     # If not found, check the app's static/images folder
     elif os.path.exists(os.path.join(app_static_folder, 'images', filename)):
         return send_from_directory(os.path.join(app_static_folder, 'images'), filename)
