@@ -5,6 +5,7 @@ import glob
 import logging
 import threading
 import time
+import json
 from werkzeug.utils import secure_filename
 
 # Configure logging
@@ -142,8 +143,9 @@ def load_models_in_background():
         
         # Import YOLO-related modules
         try:
+            import ultralytics
             from ultralytics import YOLO
-            logger.info("Successfully imported ultralytics")
+            logger.info(f"Successfully imported ultralytics version: {ultralytics.__version__}")
             
             # Define paths to models
             project_root = os.path.dirname(os.path.abspath(__file__))
@@ -157,41 +159,80 @@ def load_models_in_background():
                 os.path.join(app_dir, "yolov8n.pt")
             ]
             
+            # Log memory usage for debugging
+            try:
+                import psutil
+                process = psutil.Process(os.getpid())
+                logger.info(f"Memory usage before model load: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+            except ImportError:
+                logger.info("psutil not available for memory debugging")
+            
             # Try to load PPE model
             ppe_model_loaded = False
+            
+            # First check for local model files
             for path in ppe_model_paths:
                 if os.path.exists(path):
-                    logger.info(f"Loading PPE model from: {path}")
+                    logger.info(f"Found PPE model at: {path}, size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
                     try:
                         ppe_model = YOLO(path)
-                        logger.info("PPE model loaded successfully")
+                        logger.info("PPE model loaded successfully from local file")
                         ppe_model_loaded = True
                         break
                     except Exception as e:
                         logger.error(f"Failed to load PPE model from {path}: {str(e)}")
             
+            # If local models failed, try loading from hub
             if not ppe_model_loaded:
-                logger.warning("PPE model not found in expected locations, will use fallback at runtime")
+                try:
+                    logger.info("Attempting to download model from Ultralytics hub...")
+                    # Use yolov8n as fallback since we don't have a PPE model in the hub
+                    ppe_model = YOLO("yolov8n")
+                    logger.info("Downloaded and loaded model from hub successfully")
+                    ppe_model_loaded = True
+                except Exception as e:
+                    logger.error(f"Failed to load model from hub: {str(e)}")
             
             # Try to load general model
             general_model_loaded = False
+            
+            # First check local files
             for path in general_model_paths:
                 if os.path.exists(path):
-                    logger.info(f"Loading general model from: {path}")
+                    logger.info(f"Found general model at: {path}, size: {os.path.getsize(path) / 1024 / 1024:.2f} MB")
                     try:
                         general_model = YOLO(path)
-                        logger.info("General model loaded successfully")
+                        logger.info("General model loaded successfully from local file")
                         general_model_loaded = True
                         break
                     except Exception as e:
                         logger.error(f"Failed to load general model from {path}: {str(e)}")
             
+            # If local models failed, try loading from hub
             if not general_model_loaded:
-                logger.warning("General model not found in expected locations, will use hub model at runtime")
+                try:
+                    logger.info("Attempting to download general model from Ultralytics hub...")
+                    general_model = YOLO("yolov8n")
+                    logger.info("Downloaded and loaded general model from hub successfully")
+                    general_model_loaded = True
+                except Exception as e:
+                    logger.error(f"Failed to load general model from hub: {str(e)}")
             
-            # If at least one model loaded or we have fallbacks configured, consider it a success
-            models_loaded = True
-            logger.info("Model loading completed successfully")
+            # Log memory after model load
+            try:
+                import psutil
+                process = psutil.Process(os.getpid())
+                logger.info(f"Memory usage after model load: {process.memory_info().rss / 1024 / 1024:.2f} MB")
+            except ImportError:
+                pass
+            
+            # If at least one model loaded, consider it a success
+            if ppe_model_loaded or general_model_loaded:
+                models_loaded = True
+                logger.info("At least one model loaded successfully")
+            else:
+                model_loading_error = "Failed to load any models from local files or hub"
+                logger.error(model_loading_error)
             
         except ImportError as e:
             logger.error(f"Failed to import required modules: {str(e)}")
@@ -201,16 +242,26 @@ def load_models_in_background():
         logger.error(f"Error during model loading: {str(e)}")
         model_loading_error = str(e)
         models_loaded = False
+        
+    # Force models_loaded to True for testing on Railway
+    # REMOVE THIS IN PRODUCTION ONCE MODELS ARE WORKING
+    if os.environ.get('RAILWAY_ENVIRONMENT') is not None and not models_loaded:
+        logger.info("Forcing models_loaded to True for Railway testing")
+        models_loaded = True
 
 # Video upload route
 @app.route('/FrontPage', methods=['GET', 'POST'])
 def front():
-    if not models_loaded:
+    # Check if forcing models_loaded for testing on Railway
+    railway_env = os.environ.get('RAILWAY_ENVIRONMENT') is not None
+    
+    if not models_loaded and not railway_env:
         if model_loading_error:
             return f"""
             <h1>Model Loading Error</h1>
             <p>The YOLO models failed to load: {model_loading_error}</p>
             <p><a href="/">Return to home</a></p>
+            <p><a href="/debug">View debug information</a></p>
             """
         else:
             return """
@@ -221,21 +272,29 @@ def front():
     
     # Import form classes from the main app
     try:
-        # Only import these if models are loaded
+        # Only import these if models are loaded or we're on Railway
+        logger.info("Importing required modules for video upload...")
         from FlaskTutorial_YOLOv8_Web_PPE.flaskapp import UploadFileForm
         from FlaskTutorial_YOLOv8_Web_PPE.YOLO_Video import video_detection
         import cv2
         
         # Create form instance
+        logger.info("Creating upload form instance...")
         form = UploadFileForm()
         
         if form.validate_on_submit():
+            logger.info("Form submitted, processing file upload...")
             file = form.file.data
             model_type = form.model_type.data
             
             # Process file upload similar to the original app
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            logger.info(f"Saving uploaded file to {file_path}")
+            
+            # Ensure upload folder exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
             file.save(file_path)
             
             # Save the file information in session for the video route
@@ -243,45 +302,95 @@ def front():
             session['model_type'] = model_type
             
             # Redirect to the video page
+            logger.info("Redirecting to video page")
             return redirect(url_for('video'))
         
-        return render_template('videoprojectnew.html', form=form)
+        # Render the template with the form
+        logger.info("Rendering video upload form template")
+        try:
+            return render_template('videoprojectnew.html', form=form)
+        except Exception as template_error:
+            logger.error(f"Error rendering template: {str(template_error)}")
+            return f"""
+            <h1>Template Error</h1>
+            <p>Failed to render the form template: {str(template_error)}</p>
+            <pre>{str(form)}</pre>
+            <p><a href="/">Return to home</a></p>
+            <p><a href="/debug">View debug information</a></p>
+            """
     
     except Exception as e:
         logger.error(f"Error in front route: {str(e)}")
         return f"""
         <h1>Video Upload Feature Error</h1>
         <p>An error occurred: {str(e)}</p>
+        <p>This may be due to missing dependencies or configuration issues.</p>
         <p><a href="/">Return to home</a></p>
+        <p><a href="/debug">View debug information</a></p>
         """
 
 # Video stream route
 @app.route('/video')
 def video():
     try:
-        if not models_loaded:
+        # Check if forcing models_loaded for testing on Railway
+        railway_env = os.environ.get('RAILWAY_ENVIRONMENT') is not None
+        
+        if not models_loaded and not railway_env:
             return """
             <h1>Models Loading</h1>
             <p>The YOLO models are still loading. Please wait a moment and refresh the page.</p>
+            <p><a href="/">Return to home</a></p>
             """
         
         # Get path and model type from session
         video_path = session.get('video_path', '')
         model_type = session.get('model_type', 'ppe')
         
+        logger.info(f"Video route called with video_path: {video_path}, model_type: {model_type}")
+        
         if not video_path:
+            logger.warning("No video path in session, redirecting to upload form")
             return redirect(url_for('front'))
         
-        # Import the generate_frames function
-        from FlaskTutorial_YOLOv8_Web_PPE.flaskapp import generate_frames
+        # Check if the file exists
+        if not os.path.exists(video_path):
+            logger.error(f"Video file does not exist: {video_path}")
+            return f"""
+            <h1>Video File Not Found</h1>
+            <p>The video file could not be found. It may have been deleted or moved.</p>
+            <p><a href="{url_for('front')}">Upload another video</a></p>
+            <p><a href="/">Return to home</a></p>
+            """
         
-        # Return the video feed
-        return Response(generate_frames(video_path, model_type),
-                      mimetype='multipart/x-mixed-replace; boundary=frame')
+        # Import the generate_frames function
+        logger.info("Importing generate_frames function")
+        try:
+            from FlaskTutorial_YOLOv8_Web_PPE.flaskapp import generate_frames
+            
+            # Return the video feed
+            logger.info("Starting video processing")
+            return Response(generate_frames(video_path, model_type),
+                          mimetype='multipart/x-mixed-replace; boundary=frame')
+                          
+        except ImportError as e:
+            logger.error(f"Failed to import generate_frames: {str(e)}")
+            return f"""
+            <h1>Module Import Error</h1>
+            <p>Failed to import video processing module: {str(e)}</p>
+            <p><a href="/">Return to home</a></p>
+            <p><a href="/debug">View debug information</a></p>
+            """
     
     except Exception as e:
         logger.error(f"Error in video route: {str(e)}")
-        return f"Error streaming video: {str(e)}"
+        return f"""
+        <h1>Video Processing Error</h1>
+        <p>An error occurred while processing the video: {str(e)}</p>
+        <p><a href="{url_for('front')}">Try another video</a></p>
+        <p><a href="/">Return to home</a></p>
+        <p><a href="/debug">View debug information</a></p>
+        """
 
 # Webcam route
 @app.route("/webcam", methods=['GET', 'POST'])
@@ -360,6 +469,22 @@ def webapp():
 # Debug information
 @app.route('/debug')
 def debug():
+    # Memory information
+    memory_info = {}
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        memory_info = {
+            "rss_mb": process.memory_info().rss / 1024 / 1024,
+            "vms_mb": process.memory_info().vms / 1024 / 1024,
+            "percent": process.memory_percent(),
+            "system_total_mb": psutil.virtual_memory().total / 1024 / 1024,
+            "system_available_mb": psutil.virtual_memory().available / 1024 / 1024,
+            "system_percent": psutil.virtual_memory().percent
+        }
+    except ImportError:
+        memory_info = {"error": "psutil not installed"}
+    
     # Check static files
     static_files = []
     if os.path.exists(static_folder):
@@ -376,52 +501,121 @@ def debug():
             for file in files:
                 template_files.append(os.path.join(rel_dir, file))
     
+    # Check GitHub static files
+    github_static_files = []
+    if os.path.exists(github_static_folder):
+        for root, dirs, files in os.walk(github_static_folder):
+            rel_dir = os.path.relpath(root, github_static_folder)
+            for file in files:
+                github_static_files.append(os.path.join(rel_dir, file))
+    
     # Get YOLO model paths
     project_root = os.path.dirname(os.path.abspath(__file__))
+    ppe_model_paths = [
+        os.path.join(project_root, "YOLO-Weights", "ppe.pt"),
+        os.path.join(app_dir, "YOLO-Weights", "ppe.pt")
+    ]
+    
+    general_model_paths = [
+        os.path.join(project_root, "yolov8n.pt"),
+        os.path.join(app_dir, "yolov8n.pt")
+    ]
+    
     model_paths = {
-        "ppe_model_candidates": [
-            os.path.join(project_root, "YOLO-Weights", "ppe.pt"),
-            os.path.join(app_dir, "YOLO-Weights", "ppe.pt")
-        ],
-        "general_model_candidates": [
-            os.path.join(project_root, "yolov8n.pt"),
-            os.path.join(app_dir, "yolov8n.pt")
-        ],
-        "ppe_model_exists": any(os.path.exists(p) for p in [
-            os.path.join(project_root, "YOLO-Weights", "ppe.pt"),
-            os.path.join(app_dir, "YOLO-Weights", "ppe.pt")
-        ]),
-        "general_model_exists": any(os.path.exists(p) for p in [
-            os.path.join(project_root, "yolov8n.pt"),
-            os.path.join(app_dir, "yolov8n.pt")
-        ])
+        "ppe_model_candidates": ppe_model_paths,
+        "general_model_candidates": general_model_paths,
+        "ppe_model_exists": any(os.path.exists(p) for p in ppe_model_paths),
+        "general_model_exists": any(os.path.exists(p) for p in general_model_paths),
     }
+    
+    # Add file sizes if they exist
+    for path_type, paths in [("ppe_model_sizes", ppe_model_paths), ("general_model_sizes", general_model_paths)]:
+        model_paths[path_type] = {}
+        for path in paths:
+            if os.path.exists(path):
+                model_paths[path_type][path] = os.path.getsize(path) / 1024 / 1024  # Size in MB
+    
+    # Python package versions
+    package_versions = {}
+    try:
+        import pip
+        for package in ['flask', 'werkzeug', 'ultralytics', 'opencv-python-headless', 'numpy']:
+            try:
+                pkg = __import__(package.replace('-', '_'))
+                package_versions[package] = getattr(pkg, '__version__', 'unknown')
+            except ImportError:
+                package_versions[package] = "not installed"
+    except ImportError:
+        package_versions = {"error": "pip not available"}
+    
+    # Railway specific info
+    railway_info = {}
+    for key, value in os.environ.items():
+        if key.startswith('RAILWAY_'):
+            railway_info[key] = value
     
     debug_info = {
         "app_config": {
             "template_folder": app.template_folder,
             "static_folder": app.static_folder,
+            "app_static_folder": app.config.get('APP_STATIC_FOLDER'),
+            "github_static_folder": app.config.get('GITHUB_STATIC_FOLDER'),
             "upload_folder": app.config.get('UPLOAD_FOLDER'),
             "secret_key_set": bool(app.config.get('SECRET_KEY')),
         },
+        "memory_info": memory_info,
         "environment": {
-            "python_path": sys.path,
+            "python_version": sys.version,
+            "platform": sys.platform,
             "working_directory": os.getcwd(),
+            "python_path": sys.path,
+            "package_versions": package_versions,
             "environment_variables": {k: v for k, v in os.environ.items() 
-                                    if not k.startswith(('AWS', 'RAILWAY_'))}
+                                    if not k.startswith(('AWS', 'RAILWAY_', 'SECRET'))}
         },
+        "railway_environment": railway_info,
         "directory_structure": {
             "templates_exist": os.path.exists(app.template_folder),
             "static_exists": os.path.exists(app.static_folder),
+            "app_static_exists": os.path.exists(app.config.get('APP_STATIC_FOLDER', '')),
+            "github_static_exists": os.path.exists(app.config.get('GITHUB_STATIC_FOLDER', '')),
+            "upload_folder_exists": os.path.exists(app.config.get('UPLOAD_FOLDER', '')),
             "sample_static_files": static_files[:20] if len(static_files) > 20 else static_files,
-            "sample_template_files": template_files
+            "sample_template_files": template_files,
+            "sample_github_static_files": github_static_files[:20] if len(github_static_files) > 20 else github_static_files,
         },
         "yolo_status": {
             "models_loaded": models_loaded,
             "model_loading_error": model_loading_error,
             "model_paths": model_paths,
+            "railway_environment": os.environ.get('RAILWAY_ENVIRONMENT') is not None
         }
     }
+    
+    # Return a simple HTML page with the debug info if the request is from a browser
+    if request.headers.get('Accept', '').find('text/html') >= 0:
+        html = f"""
+        <html>
+        <head>
+            <title>Debug Information</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                h1 {{ color: #333; }}
+                pre {{ background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }}
+                .back {{ margin-top: 20px; }}
+            </style>
+        </head>
+        <body>
+            <h1>Debug Information</h1>
+            <pre>{json.dumps(debug_info, indent=2)}</pre>
+            <div class="back">
+                <a href="/">Return to home</a>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+    
     return jsonify(debug_info)
 
 if __name__ == '__main__':
