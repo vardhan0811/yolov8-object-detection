@@ -38,6 +38,9 @@ COPY . .
 # Create upload directory
 RUN mkdir -p static/files
 
+# Make sure start.sh is executable
+RUN chmod +x start.sh
+
 # Set environment variables
 ENV RAILWAY_ENVIRONMENT=true \
     YOLO_DEVICE=cpu \
@@ -46,18 +49,5 @@ ENV RAILWAY_ENVIRONMENT=true \
     MODEL_CACHE_ENABLED=true \
     DISABLE_WEBCAM=true
 
-# Create an entrypoint script to ensure PORT is set
-RUN echo '#!/bin/bash\n\
-# Use default port 8000 if PORT is not set or is $PORT literal\n\
-if [ "$PORT" = "" ] || [ "$PORT" = "\$PORT" ]; then\n\
-  export PORT=8000\n\
-  echo "Using default PORT=8000"\n\
-fi\n\
-\n\
-# Execute gunicorn with the resolved port\n\
-echo "Starting server on port $PORT"\n\
-exec gunicorn enhanced:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=2 --threads=2\n\
-' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
-
-# Use the entrypoint script
-ENTRYPOINT ["/app/entrypoint.sh"] 
+# Run the start script directly
+CMD ["bash", "./start.sh"] 

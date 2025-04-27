@@ -6,7 +6,7 @@
   },
   "deploy": {
     "numReplicas": 1,
-    "startCommand": "PORT=8000 gunicorn enhanced:app --log-file=- --log-level=info --bind=0.0.0.0:8000 --timeout 120 --workers=2 --threads=2",
+    "startCommand": "bash ./start.sh",
     "sleepApplication": false,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
