@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO Object Detection App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #4a69dd, #007bff);
+            padding: 80px 0;
+            color: white;
+            text-align: center;
+            margin-bottom: 40px;
+            border-radius: 0 0 10px 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .hero-section h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .hero-section p {
+            font-size: 1.2rem;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            opacity: 0.9;
+        }
+        .feature-card {
+            border-radius: 10px;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            height: 100%;
+            border: none;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        .feature-card .card-header {
+            font-weight: 600;
+            padding: 15px 20px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        .feature-card .card-body {
+            padding: 25px;
+        }
+        .feature-icon {
+            font-size: 40px;
+            margin-bottom: 20px;
+            color: #007bff;
+        }
+        .btn-primary {
+            padding: 10px 25px;
+            font-weight: 500;
+            border-radius: 30px;
+        }
+        .btn-outline-primary {
+            border-radius: 30px;
+            padding: 10px 25px;
+            font-weight: 500;
+        }
+        .model-status {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 40px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .footer {
+            margin-top: 60px;
+            padding: 30px 0;
+            background-color: #343a40;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="container">
+            <h1><i class="fas fa-eye me-2"></i>YOLO Object Detection</h1>
+            <p>Detect, identify, and locate objects in images using state-of-the-art YOLOv8 models.</p>
+            <a href="/upload" class="btn btn-light btn-lg">
+                <i class="fas fa-upload me-2"></i>Upload an Image
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Features -->
+        <div class="row mb-5">
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card">
+                    <div class="card-header">
+                        <i class="fas fa-bolt me-2 text-primary"></i>Fast Detection
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <h5>High-Performance Detection</h5>
+                        <p>YOLOv8 delivers real-time object detection with exceptional speed and accuracy.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card">
+                    <div class="card-header">
+                        <i class="fas fa-th-large me-2 text-primary"></i>Multiple Objects
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-object-group"></i>
+                        </div>
+                        <h5>Multi-Class Detection</h5>
+                        <p>Detect and classify multiple objects simultaneously within a single image.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card feature-card">
+                    <div class="card-header">
+                        <i class="fas fa-image me-2 text-primary"></i>Image Processing
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-camera-retro"></i>
+                        </div>
+                        <h5>Image Uploads</h5>
+                        <p>Upload your images to instantly analyze and identify objects with precision.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Get Started Section -->
+        <div class="text-center mb-5">
+            <h2 class="mb-4">Ready to start detecting objects?</h2>
+            <a href="/upload" class="btn btn-primary btn-lg mb-3">
+                <i class="fas fa-upload me-2"></i>Upload an Image
+            </a>
+        </div>
+
+        <!-- Model Status -->
+        <div class="model-status">
+            <h4><i class="fas fa-info-circle me-2"></i>Model Status</h4>
+            <p>Current deployed model: <strong>YOLOv8</strong></p>
+            
+            {% if model_loaded %}
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i> Model loaded successfully and ready for detection!
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i> Model is still being loaded or there was an error loading the model.
+                <br>
+                <small>Status: Model loaded = {{ model_loaded }}</small>
+                
+                {% if model_error %}
+                <div class="mt-2">
+                    <strong>Error details:</strong> {{ model_error }}
+                    <br><br>
+                    <a href="/reload_model" class="btn btn-warning btn-sm">
+                        <i class="fas fa-sync-alt me-1"></i> Attempt to Reload Model
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Debug Info -->
+        <div class="text-center mt-4">
+            <a href="/debug" class="btn btn-outline-secondary">
+                <i class="fas fa-bug me-2"></i>View Debug Information
+            </a>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer mt-5">
+        <div class="container text-center">
+            <p>Powered by YOLOv8 and Flask</p>
+            <p><small>© 2023 YOLO Object Detection App</small></p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
