@@ -8,24 +8,25 @@ dist/
 build/
 *.egg-info/
 
-# Environments
-.env
-.venv
-env/
+# Virtual environment
 venv/
+env/
 ENV/
 
-# IDE specific files
-.idea/
-.vscode/
+# Environment variables
+.env
+.env.*
 
-# Large media files
+# Large files
 *.mp4
 *.avi
+*.pt
 Videos/
 Images/
-output.avi
-*.partial
+
+# Debug and IDE files
+.vscode/
+.idea/
 
 # Temporary files
 temp/
