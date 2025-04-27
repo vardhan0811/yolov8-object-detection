@@ -5,7 +5,7 @@
     "buildCommand": "echo 'Building application...'"
   },
   "deploy": {
-    "startCommand": "gunicorn minimal:app --bind 0.0.0.0:$PORT --workers=1 --timeout=30",
+    "startCommand": "gunicorn enhanced:app --bind 0.0.0.0:$PORT --workers=1 --timeout=60",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
