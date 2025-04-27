@@ -81,7 +81,9 @@ def ping():
 def home():
     try:
         logger.info("Rendering home page template")
-        return render_template('indexproject.html', models_loaded=models_loaded, loading_error=model_loading_error)
+        # Add a version parameter to force reload of static assets
+        version = int(time.time())  # Use current timestamp as version
+        return render_template('indexproject.html', models_loaded=models_loaded, loading_error=model_loading_error, version=version)
     except Exception as e:
         logger.error(f"Error rendering template: {str(e)}")
         return f"""
