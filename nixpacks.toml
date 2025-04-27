@@ -1,0 +1,10 @@
+[phases.setup]
+nixpkgs = ["opencv", "ffmpeg", "libGL", "libsm6", "libxext6", "libxrender1", "libglib2", "pkg-config"]
+
+[phases.install]
+cmds = ["apt-get update", 
+        "apt-get install -y --no-install-recommends libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6 libxcb-shm0 libxcb-xfixes0 ffmpeg libavcodec-extra libjpeg-dev libpng-dev libtiff-dev libv4l-dev",
+        "pip install -r requirements.txt"]
+
+[start]
+cmd = "gunicorn enhanced:app --log-file=- --log-level=info --bind=0.0.0.0:$PORT --timeout 120 --workers=2 --threads=2" 

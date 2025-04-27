@@ -8,6 +8,7 @@ import time
 import json
 from werkzeug.utils import secure_filename
 import numpy as np
+import base64
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -351,14 +352,37 @@ def front():
             logger.info("Successfully imported OpenCV")
         except ImportError as e:
             logger.error(f"Failed to import OpenCV: {str(e)}")
-            return f"""
-            <h1>System Dependency Error</h1>
-            <p>The application is missing required system libraries for OpenCV: {str(e)}</p>
-            <p>This is a common issue on cloud deployments. The administrator needs to install the following packages:</p>
-            <pre>libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6</pre>
-            <p><a href="/">Return to home</a></p>
-            <p><a href="/debug">View debug information</a></p>
-            """
+            
+            # More specific error handling for Railway
+            if "libGL.so.1" in str(e):
+                # This is the common OpenCV error on Railway
+                return f"""
+                <h1>System Dependency Error</h1>
+                <p>The application is missing required system libraries for OpenCV: {str(e)}</p>
+                <p>This is a common issue on cloud deployments. The system needs additional libraries.</p>
+                
+                <h2>Troubleshooting Steps for Railway:</h2>
+                <ol>
+                    <li>Check your Dockerfile or railway.json configuration</li>
+                    <li>Ensure you've installed all required system packages:
+                        <pre>libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6 libxcb-shm0 libxcb-xfixes0 ffmpeg</pre>
+                    </li>
+                    <li>Try using the Dockerfile deployment method which has more explicit dependency handling</li>
+                    <li>Visit <a href="/test_opencv">the OpenCV test page</a> for additional diagnostics</li>
+                </ol>
+                
+                <p><a href="/">Return to home</a></p>
+                <p><a href="/debug">View debug information</a></p>
+                """
+            else:
+                return f"""
+                <h1>System Dependency Error</h1>
+                <p>The application is missing required system libraries for OpenCV: {str(e)}</p>
+                <p>This is a common issue on cloud deployments. The administrator needs to install the following packages:</p>
+                <pre>libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6</pre>
+                <p><a href="/">Return to home</a></p>
+                <p><a href="/debug">View debug information</a></p>
+                """
         
         # Try to import the rest of our dependencies
         try:
@@ -712,6 +736,92 @@ def debug():
         return html
     
     return jsonify(debug_info)
+
+# A route to help verify OpenCV installation 
+@app.route('/test_opencv')
+def test_opencv():
+    logger.info("Testing OpenCV installation")
+    try:
+        import cv2
+        
+        # Test that OpenCV is functioning with the key libraries
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        cv2.rectangle(img, (10, 10), (90, 90), (0, 255, 0), 2)
+        _, buffer = cv2.imencode('.jpg', img)
+        
+        # Return success if everything works
+        opencv_info = {
+            "version": cv2.__version__,
+            "build_info": cv2.getBuildInformation()
+        }
+        
+        # Extract key build information for troubleshooting
+        build_summary = {}
+        for line in opencv_info["build_info"].split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                build_summary[key.strip()] = value.strip()
+        
+        # Create an HTML response
+        html = f"""
+        <html>
+        <head>
+            <title>OpenCV Test</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                h1 {{ color: green; }}
+                pre {{ background-color: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }}
+                .back {{ margin-top: 20px; }}
+                img {{ border: 1px solid #ddd; }}
+            </style>
+        </head>
+        <body>
+            <h1>OpenCV is working correctly!</h1>
+            <p>Version: {opencv_info["version"]}</p>
+            
+            <h2>Test Image:</h2>
+            <img src="data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}" alt="Test Image">
+            
+            <h2>Key Build Information:</h2>
+            <pre>{json.dumps(build_summary, indent=2)}</pre>
+            
+            <div class="back">
+                <a href="/">Return to home</a>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+        
+    except ImportError as e:
+        logger.error(f"OpenCV import error: {str(e)}")
+        return f"""
+        <h1>OpenCV Import Error</h1>
+        <p>Failed to import OpenCV: {str(e)}</p>
+        <p>This usually indicates missing system dependencies.</p>
+        
+        <h2>Troubleshooting Steps:</h2>
+        <ol>
+            <li>Check that all required system packages are installed:
+                <pre>libgl1-mesa-glx libglib2.0-0 libsm6 libxrender1 libxext6 libxcb-shm0 libxcb-xfixes0</pre>
+            </li>
+            <li>Verify that opencv-python-headless is installed:
+                <pre>pip install opencv-python-headless==4.8.1.78</pre>
+            </li>
+            <li>Review Railway deployment logs for any errors during installation</li>
+        </ol>
+        
+        <p><a href="/">Return to home</a></p>
+        <p><a href="/debug">View debug information</a></p>
+        """
+    except Exception as e:
+        logger.error(f"OpenCV test error: {str(e)}")
+        return f"""
+        <h1>OpenCV Error</h1>
+        <p>Error testing OpenCV functionality: {str(e)}</p>
+        <p><a href="/">Return to home</a></p>
+        <p><a href="/debug">View debug information</a></p>
+        """
 
 if __name__ == '__main__':
     # Start background model loading
