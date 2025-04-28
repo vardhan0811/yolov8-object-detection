@@ -2,7 +2,7 @@ import os
 import threading
 import time
 import importlib.util
-from flask import Flask, jsonify, request, redirect, url_for, send_from_directory, render_template_string
+from flask import Flask, jsonify, request, redirect, url_for, send_from_directory, render_template_string, render_template
 
 # Create a minimal Flask app that will respond to health checks immediately
 app = Flask(__name__, 
@@ -18,38 +18,58 @@ def health_check():
     """Health check endpoint that responds immediately"""
     return jsonify({"status": "healthy"}), 200
 
+# Direct access to our football UI
 @app.route('/')
 def root_redirect():
-    """Redirect root to the static HTML file that always points to the right place"""
+    """Serve the football UI directly"""
     try:
-        return send_from_directory('static', 'index.html')
+        # First try to serve our direct override
+        return send_from_directory('static', 'override_index.html')
     except:
-        # Fallback to a dynamic redirect
-        return redirect('/home')
+        try:
+            # Next, try to render the template directly
+            return render_template('indexproject.html')
+        except:
+            # As a last resort, redirect to home
+            return redirect('/home')
 
 @app.route('/home')
 def home_redirect():
-    """Force redirect to the real app home page"""
-    if MAIN_APP_READY:
-        return MAIN_APP.view_functions['home']()
-    else:
-        return loading_page()
+    """Direct access to the home page"""
+    try:
+        # Try to render the template directly first
+        return render_template('indexproject.html')
+    except:
+        # If the template rendering fails, use the MAIN_APP if ready
+        if MAIN_APP_READY:
+            return MAIN_APP.view_functions['home']()
+        else:
+            return loading_page()
 
 @app.route('/<path:path>')
 def catch_all(path):
     """Catch-all route that forwards to the main app once it's ready"""
-    if not MAIN_APP_READY:
-        return loading_page()
-    
-    # Enable cloud mode for the main app
+    # Always ensure CLOUD_MODE is set
     os.environ['CLOUD_MODE'] = 'true'
     
-    # Use specific function if available
-    if path in MAIN_APP.view_functions:
-        return MAIN_APP.view_functions[path]()
-    
-    # Otherwise pass to the full request dispatcher
-    return MAIN_APP.full_dispatch_request()
+    # If the app is ready, use it
+    if MAIN_APP_READY:
+        # Use specific function if available
+        if path in MAIN_APP.view_functions:
+            return MAIN_APP.view_functions[path]()
+        # Otherwise pass to the full request dispatcher
+        return MAIN_APP.full_dispatch_request()
+    else:
+        # If we're waiting for the app to be ready, show loading page
+        # except for specific static paths
+        if path.startswith('static/'):
+            try:
+                # Extract the filename from the path
+                filename = path.split('/', 1)[1]
+                return send_from_directory('static', filename)
+            except:
+                return "Static file not found", 404
+        return loading_page()
 
 def loading_page():
     """Return a loading page with auto-refresh"""
@@ -115,21 +135,15 @@ def load_main_app():
         import flaskapp
         MAIN_APP = flaskapp.app
         
+        # Force the main app to use the same template folder
+        MAIN_APP.template_folder = app.template_folder
+        MAIN_APP.static_folder = app.static_folder
+        
         # Ensure the app knows it's in cloud mode
         with MAIN_APP.app_context():
             print("Application imported, setting up paths...")
             # Ensure upload folder exists
             os.makedirs(os.path.join(os.getcwd(), 'static', 'files'), exist_ok=True)
-            # Create a backup copy of indexproject.html in static if needed
-            app_dir = os.path.dirname(os.path.abspath(__file__))
-            if not os.path.exists(os.path.join(app_dir, 'static', 'ui_backup.html')):
-                try:
-                    with open(os.path.join(app_dir, 'templates', 'indexproject.html'), 'r') as src:
-                        with open(os.path.join(app_dir, 'static', 'ui_backup.html'), 'w') as dst:
-                            dst.write(src.read())
-                    print("Created UI backup file")
-                except:
-                    print("Could not create UI backup file")
         
         # Register all routes from the main app to this app
         print("Main application loaded successfully!")

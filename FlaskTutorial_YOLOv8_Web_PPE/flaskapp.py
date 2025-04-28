@@ -218,8 +218,27 @@ def generate_frames_web(path_x, model_type='ppe'):
 @app.route('/', methods=['GET','POST'])
 @app.route('/home', methods=['GET','POST'])
 def home():
-    # Force use of the correct template
+    # Force use of the correct template with the football background
     print("Home route accessed, rendering indexproject.html")
+    
+    # Check if the default Railway template is being requested and redirect
+    if request.headers.get('Host') and 'railway.app' in request.headers.get('Host'):
+        custom_css = """
+        <style>
+        body {
+            background-color: black !important;
+            color: white !important;
+        }
+        .hero {
+            background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), 
+                              url('https://media.istockphoto.com/id/1332501286/photo/football-players-in-action-on-the-sunset-stadium-background-panorama.jpg?s=612x612&w=0&k=20&c=HXvIBpM-qoq3MY_HpEVvwXCMJ_MrO2O_bUJ91y3NDB8=') !important;
+            background-size: cover !important;
+            background-position: center !important;
+        }
+        </style>
+        """
+        return render_template('indexproject.html', custom_css=custom_css)
+    
     return render_template('indexproject.html')
 
 # Add a fallback route for the root that always redirects to home
