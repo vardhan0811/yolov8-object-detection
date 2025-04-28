@@ -7,7 +7,7 @@
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>YOLOv8 Object Detection</title>
     <!-- Adding CSS -->
-    <link rel="stylesheet" href="{{ url_for('custom_static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <!-- Adding Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
     <!-- Adding Font Awesome -->
@@ -130,7 +130,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url("{{ url_for('custom_static', filename='images/1.png') }}?v={{ version }}");
+            background-image: url("{{ url_for('static', filename='images/1.png') }}?v={{ version }}");
             background-size: cover;
             background-position: center;
             filter: brightness(0.4);
@@ -480,15 +480,15 @@
     <section class="gallery">
         <div class="gallery-container">
             <div class="gallery-item" data-aos="fade-up" data-aos-delay="100">
-                <img src="{{ url_for('custom_static', filename='images/1.png') }}?v={{ version }}" alt="YOLOv8 Results 1">
+                <img src="{{ url_for('static', filename='images/1.png') }}?v={{ version }}" alt="YOLOv8 Results 1">
                 <div class="gallery-caption">YOLOv8 Results 1</div>
             </div>
             <div class="gallery-item" data-aos="fade-up" data-aos-delay="200">
-                <img src="{{ url_for('custom_static', filename='images/2.png') }}?v={{ version }}" alt="YOLOv8 Results 2">
+                <img src="{{ url_for('static', filename='images/2.png') }}?v={{ version }}" alt="YOLOv8 Results 2">
                 <div class="gallery-caption">YOLOv8 Results 2</div>
             </div>
             <div class="gallery-item" data-aos="fade-up" data-aos-delay="300">
-                <img src="{{ url_for('custom_static', filename='images/3.png') }}?v={{ version }}" alt="YOLOv8 Results 3">
+                <img src="{{ url_for('static', filename='images/3.png') }}?v={{ version }}" alt="YOLOv8 Results 3">
                 <div class="gallery-caption">YOLOv8 Results 3</div>
             </div>
         </div>

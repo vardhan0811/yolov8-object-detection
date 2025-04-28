@@ -54,6 +54,49 @@ def get_model(weights_path, model_type):
                 raise
 
 def video_detection(path_x, model_type='ppe'):
+    """
+    Main function for video/webcam object detection
+    :param path_x: Path to video or webcam index
+    :param model_type: Type of model to use ('ppe' or other)
+    :return: Frames with detection
+    """
+    # Check if running in cloud environment
+    cloud_mode = os.environ.get('CLOUD_MODE', 'false').lower() == 'true'
+    
+    # Check for other cloud environment indicators
+    is_cloud = cloud_mode or any([
+        os.environ.get('RAILWAY_ENVIRONMENT') is not None,
+        os.environ.get('RENDER') is not None,
+        os.environ.get('HEROKU_APP_ID') is not None,
+        os.environ.get('DYNO') is not None,  # Heroku 
+        os.environ.get('PORT') == '10000'  # Common Railway port
+    ])
+    
+    # If path is a string but represents a number, convert it to int for camera
+    if isinstance(path_x, str) and path_x.isdigit():
+        path_x = int(path_x)
+        
+    # In cloud mode with webcam, use a demo video as webcam access is usually blocked
+    if is_cloud and isinstance(path_x, int):
+        print(f"Running in cloud mode. Using demo video instead of webcam {path_x}")
+        # Try to find a local demo video first
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        demo_video_paths = [
+            os.path.join(current_dir, "static", "demo.mp4"),
+            os.path.join(current_dir, "static", "demo_video.mp4"),
+            os.path.join(current_dir, "static", "files", "demo.mp4"),
+            "https://media.githubusercontent.com/media/ultralytics/assets/main/yolov8_video.mp4"
+        ]
+        
+        # Try each path
+        for demo_path in demo_video_paths:
+            if demo_path.startswith('http') or os.path.exists(demo_path):
+                path_x = demo_path
+                print(f"Using demo video: {path_x}")
+                break
+    
+    print(f"Video source: {path_x}")
+
     video_capture = path_x
     
     # Check if the input is an image file
@@ -75,25 +118,49 @@ def video_detection(path_x, model_type='ppe'):
                 
                 # Determine which model to use based on model_type
                 current_dir = os.path.dirname(os.path.abspath(__file__))
-                project_root = os.path.dirname(current_dir)
+                parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                 
                 if model_type == 'ppe':
-                    # Try multiple potential paths for PPE model
-                    potential_paths = [
-                        os.path.join(project_root, "YOLO-Weights", "ppe.pt"),
-                        os.path.join(current_dir, "YOLO-Weights", "ppe.pt"),
-                        os.path.join(current_dir, "ppe.pt")
-                    ]
-                    weights_path = find_existing_file(potential_paths, "PPE model")
+                    # PPE detection model
+                    weights_path = os.path.join(parent_dir, "YOLO-Weights", "ppe.pt")
+                    # Check if file exists and print debug info
+                    if not os.path.exists(weights_path):
+                        print(f"WARNING: PPE model file not found at {weights_path}")
+                        print(f"Checking alternative locations...")
+                        
+                        # Try alternative locations
+                        alt_paths = [
+                            os.path.join(current_dir, "ppe.pt"),
+                            os.path.join(parent_dir, "ppe.pt"),
+                            os.path.join(current_dir, "YOLO-Weights", "ppe.pt")
+                        ]
+                        
+                        for alt_path in alt_paths:
+                            if os.path.exists(alt_path):
+                                print(f"Found model at alternative path: {alt_path}")
+                                weights_path = alt_path
+                                break
+                    
                     classNames = ['Protective Helmet', 'Shield', 'Jacket', 'Dust Mask', 'Eye Wear', 'Glove', 'Protective Boots']
                 else:
-                    # Try multiple potential paths for general model
-                    potential_paths = [
-                        os.path.join(project_root, "yolov8n.pt"),
-                        os.path.join(current_dir, "yolov8n.pt"),
-                        "yolov8n"  # This will use the model from Ultralytics hub if local file not found
-                    ]
-                    weights_path = find_existing_file(potential_paths, "general model")
+                    # General object detection model (COCO dataset - 80 classes)
+                    weights_path = os.path.join(parent_dir, "yolov8n.pt")
+                    # Check if file exists and print debug info
+                    if not os.path.exists(weights_path):
+                        print(f"WARNING: General model file not found at {weights_path}")
+                        print(f"Checking alternative locations...")
+                        
+                        # Try alternative locations
+                        alt_paths = [
+                            os.path.join(current_dir, "yolov8n.pt"),
+                            os.path.join(current_dir, "YOLO-Weights", "yolov8n.pt")
+                        ]
+                        
+                        for alt_path in alt_paths:
+                            if os.path.exists(alt_path):
+                                print(f"Found model at alternative path: {alt_path}")
+                                weights_path = alt_path
+                                break
                     classNames = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 
                                   'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 
                                   'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 
@@ -120,7 +187,13 @@ def video_detection(path_x, model_type='ppe'):
                             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
                             conf = math.ceil((box.conf[0]*100))/100
                             cls = int(box.cls[0])
-                            class_name = classNames[cls]
+                            
+                            # Add safety check to prevent index out of range error
+                            if cls < 0 or cls >= len(classNames):
+                                print(f"Warning: Class index {cls} is out of range for classNames list of length {len(classNames)}")
+                                class_name = f"Unknown-{cls}"
+                            else:
+                                class_name = classNames[cls]
                             label = f'{class_name} {conf}'
                             t_size = cv2.getTextSize(label, 0, fontScale=1, thickness=2)[0]
                             c2 = x1 + t_size[0], y1 - t_size[1] - 3
@@ -169,18 +242,6 @@ def video_detection(path_x, model_type='ppe'):
             
             return
     
-    # Check if we're in a cloud environment (Railway) - disable webcam in cloud
-    is_cloud = os.environ.get('RAILWAY_ENVIRONMENT') is not None
-    
-    # Create a Webcam Object only if not in cloud environment
-    if is_cloud and (isinstance(video_capture, int) or video_capture == '0'):
-        print("Webcam access disabled in cloud environment")
-        error_img = create_error_frame("Webcam access is not available in cloud deployment. Please use the video upload feature instead.")
-        while True:
-            yield error_img
-            time.sleep(0.5)
-        return
-    
     # Create a Webcam Object
     cap = cv2.VideoCapture(video_capture)
     
@@ -210,15 +271,49 @@ def video_detection(path_x, model_type='ppe'):
     
     # Determine which model to use based on model_type
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     if model_type == 'ppe':
         # PPE detection model
-        weights_path = os.path.join(project_root, "YOLO-Weights", "ppe.pt")
+        weights_path = os.path.join(parent_dir, "YOLO-Weights", "ppe.pt")
+        # Check if file exists and print debug info
+        if not os.path.exists(weights_path):
+            print(f"WARNING: PPE model file not found at {weights_path}")
+            print(f"Checking alternative locations...")
+            
+            # Try alternative locations
+            alt_paths = [
+                os.path.join(current_dir, "ppe.pt"),
+                os.path.join(parent_dir, "ppe.pt"),
+                os.path.join(current_dir, "YOLO-Weights", "ppe.pt")
+            ]
+            
+            for alt_path in alt_paths:
+                if os.path.exists(alt_path):
+                    print(f"Found model at alternative path: {alt_path}")
+                    weights_path = alt_path
+                    break
+        
         classNames = ['Protective Helmet', 'Shield', 'Jacket', 'Dust Mask', 'Eye Wear', 'Glove', 'Protective Boots']
     else:
         # General object detection model (COCO dataset - 80 classes)
-        weights_path = os.path.join(project_root, "yolov8n.pt")
+        weights_path = os.path.join(parent_dir, "yolov8n.pt")
+        # Check if file exists and print debug info
+        if not os.path.exists(weights_path):
+            print(f"WARNING: General model file not found at {weights_path}")
+            print(f"Checking alternative locations...")
+            
+            # Try alternative locations
+            alt_paths = [
+                os.path.join(current_dir, "yolov8n.pt"),
+                os.path.join(current_dir, "YOLO-Weights", "yolov8n.pt")
+            ]
+            
+            for alt_path in alt_paths:
+                if os.path.exists(alt_path):
+                    print(f"Found model at alternative path: {alt_path}")
+                    weights_path = alt_path
+                    break
         classNames = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 
                       'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 
                       'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 
@@ -230,11 +325,26 @@ def video_detection(path_x, model_type='ppe'):
                       'mouse', 'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 
                       'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush']
     
-    # Print model path to confirm it's correct
+    # If still not found, use the default YOLO model
+    if not os.path.exists(weights_path):
+        print("No local model found, using default YOLOv8n from Ultralytics")
+        weights_path = "yolov8n"  # This will trigger download from Ultralytics
+    
+    # Print model path to confirm
     print(f"Loading model from: {weights_path}, Model type: {model_type}")
     
     try:
-        model = get_model(weights_path, model_type)
+        # Try loading the specified model
+        if os.path.exists(weights_path):
+            model = YOLO(weights_path)
+        else:
+            print(f"WARNING: Model file not found at {weights_path}, using default model")
+            # Use default model directly 
+            if model_type == 'ppe':
+                print("PPE model not found, falling back to general detection model")
+                model = YOLO("yolov8n")  # Fall back to general model
+            else:
+                model = YOLO("yolov8n")  # Use default YOLOv8n nano model
         
         # Initialize frame counter for error reporting
         frame_count = 0
@@ -276,7 +386,14 @@ def video_detection(path_x, model_type='ppe'):
                     print(x1, y1, x2, y2)
                     conf = math.ceil((box.conf[0]*100))/100
                     cls = int(box.cls[0])
-                    class_name = classNames[cls]
+                    
+                    # Add safety check to prevent index out of range error
+                    if cls < 0 or cls >= len(classNames):
+                        print(f"Warning: Class index {cls} is out of range for classNames list of length {len(classNames)}")
+                        class_name = f"Unknown-{cls}"
+                    else:
+                        class_name = classNames[cls]
+                        
                     label = f'{class_name}{conf}'
                     t_size = cv2.getTextSize(label, 0, fontScale=1, thickness=2)[0]
                     print(t_size)

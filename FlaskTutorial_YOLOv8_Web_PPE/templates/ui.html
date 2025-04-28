@@ -353,7 +353,14 @@
             </div>
         </nav>
         <div class="tagline">
-            Real-time <span>Object Detection</span>
+            <i class="fas fa-camera"></i> Real-time <span>Webcam</span> Detection
+        </div>
+        
+        <!-- Cloud Deployment Notice -->
+        <div id="cloud-notice" style="display: block; margin: 0 auto 20px; max-width: 800px; padding: 15px; background-color: rgba(255, 193, 7, 0.3); border-radius: 8px; text-align: center; border: 2px solid rgba(255, 193, 7, 0.7);">
+            <h3 style="margin-top: 0; color: #ffc107;"><i class="fas fa-cloud"></i> Cloud Deployment Mode</h3>
+            <p>Running on a cloud server where webcam access is limited. A demo video will be shown instead.</p>
+            <p style="margin-bottom: 0;">For full webcam functionality, please run the application locally on your machine.</p>
         </div>
     </div>
     
@@ -409,26 +416,22 @@
     </div>
 
     <div class="video-container" data-aos="fade-up">
-        <div class="video-wrapper pulse">
+        <div class="video-wrapper">
             <div class="video-frame">
-                {% if reload %}
-                <img src="{{ url_for('webapp') }}?model_type={{ model_type }}" alt="Object Detection Stream">
-                {% else %}
-                <img src="{{ url_for('webapp') }}?model_type={{ model_type }}" alt="Object Detection Stream">
-                {% endif %}
+                <img src="{{ url_for('webapp') }}" alt="Webcam Feed" id="webcam-feed">
             </div>
             <div class="status-bar">
                 <div class="stat">
-                    <div class="stat-value" id="objects-count">8</div>
-                    <div class="stat-label">Objects Detected</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="fps">48.5</div>
+                    <div class="stat-value" id="fps">0</div>
                     <div class="stat-label">FPS</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-value" id="confidence">90.1%</div>
-                    <div class="stat-label">Confidence</div>
+                    <div class="stat-value" id="detection-count">0</div>
+                    <div class="stat-label">Detections</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="resolution">-</div>
+                    <div class="stat-label">Resolution</div>
                 </div>
             </div>
         </div>
@@ -456,6 +459,47 @@
         AOS.init({
             duration: 1000,
             once: true
+        });
+    </script>
+    <script>
+        // Add to page load event to check server environment status
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check server environment status through query parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const cloudParam = urlParams.get('cloud');
+            
+            if (cloudParam !== 'true') {
+                // If not explicitly set in URL, fetch from server
+                fetch('/debug')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log("Server environment:", data);
+                        
+                        // Check for cloud environment indicators
+                        const envVars = data.environment_variables || {};
+                        const isCloud = envVars.CLOUD_MODE === 'true' || 
+                                       envVars.RAILWAY_ENVIRONMENT !== undefined ||
+                                       envVars.RENDER !== undefined ||
+                                       envVars.HEROKU_APP_ID !== undefined ||
+                                       envVars.DYNO !== undefined ||
+                                       envVars.PORT === '10000';
+                        
+                        if (!isCloud) {
+                            // Hide cloud notice if we're not in the cloud
+                            document.getElementById('cloud-notice').style.display = 'none';
+                        } else {
+                            // Add cloud=true to the webcam feed source
+                            const webcamFeed = document.getElementById('webcam-feed');
+                            if (webcamFeed) {
+                                const currentSrc = webcamFeed.src;
+                                webcamFeed.src = currentSrc + (currentSrc.includes('?') ? '&' : '?') + 'cloud=true';
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error checking server environment:", error);
+                    });
+            }
         });
     </script>
 </body>
