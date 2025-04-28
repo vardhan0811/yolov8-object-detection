@@ -229,11 +229,11 @@ def home():
             background-color: black !important;
             color: white !important;
         }
-        .hero {
-            background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), 
-                              url('https://media.istockphoto.com/id/1332501286/photo/football-players-in-action-on-the-sunset-stadium-background-panorama.jpg?s=612x612&w=0&k=20&c=HXvIBpM-qoq3MY_HpEVvwXCMJ_MrO2O_bUJ91y3NDB8=') !important;
+        .hero-bg {
+            background-image: url("/static/images/1.png") !important;
             background-size: cover !important;
             background-position: center !important;
+            filter: brightness(0.6) !important;
         }
         </style>
         """
