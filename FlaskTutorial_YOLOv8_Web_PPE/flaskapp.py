@@ -218,8 +218,19 @@ def generate_frames_web(path_x, model_type='ppe'):
 @app.route('/', methods=['GET','POST'])
 @app.route('/home', methods=['GET','POST'])
 def home():
-    session.clear()
+    # Force use of the correct template
+    print("Home route accessed, rendering indexproject.html")
     return render_template('indexproject.html')
+
+# Add a fallback route for the root that always redirects to home
+@app.route('/<path:path>')
+def catch_all_path(path):
+    # For any unknown path, redirect to home
+    if path not in ['home', 'webcam', 'FrontPage', 'video', 'webapp', 'static', 'static/demo_video', 'test_cameras', 'health', 'healthz', 'ping', 'debug']:
+        print(f"Unknown path: {path}, redirecting to home")
+        return redirect(url_for('home'))
+    # Otherwise, continue with normal routing
+    return redirect(url_for('home'))
 
 # Rendering the Webcam page
 @app.route("/webcam", methods=['GET','POST'])
